@@ -12,6 +12,9 @@
   "license": "ISC",
   "dependencies": {
     "lodash": "^4.16.4",
+    "numjs": "^0.11.5",
+    "perlin-simplex": "0.0.2",
+    "random-js": "^1.0.8",
     "react": "^15.3.2",
     "react-dom": "^15.3.2",
     "voronoi": "^1.0.0"

@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import poissonDiscSampler from '../utils/poissonDisk';
 import Voronoi from 'voronoi';
 import _ from 'lodash';
+import Simplex from 'perlin-simplex';
 
 
 function getDots(sampler) {
@@ -75,41 +76,25 @@ function renderMap(canvas, settings = {}) {
   console.timeEnd('voronoi computing');
 
   console.log(diagram);
+  const simplex = new Simplex();
 
   let cellHeights = [];
-
-  function step(cell, index, height, direction){
-    if (cellHeights[index]) {
-      return;
-    }
-    cellHeights[index] = height;
-    const neighbors = _.shuffle(cell.getNeighborIds());
-    neighbors.forEach(index => {
-      let add;
-      if (_.inRange(height, 0, 100)) {
-        add = _.random(1, 10);
-      } else if (_.inRange(height, 100, 200)) {
-        add = _.random(-5, 5);
-      } else {
-        add = _.random(-10, -1);
-      }
-      step(diagram.cells[index], index, height + add);
-    });
-  }
-  step(diagram.cells[0], 0, _.random(100, 200), 'up');
-
-  let minHeight = _.min(cellHeights);
-  let maxHeight = _.max(cellHeights);
-
+  diagram.cells.forEach((cell, index) => {
+    cellHeights[index] = (1 + simplex.noise(
+      parseInt(cell.site.x, 10),
+      parseInt(cell.site.y, 10)
+    )) * 100;
+  });
+  const avgHeight = _.mean(cellHeights);
+  console.log(cellHeights);
 
   if (settings.drawCell) {
     diagram.cells.forEach((cell, index) => {
-      // const i = parseInt(((cellHeights[index] - minHeight) / maxHeight) * 255, 10);
-      // ctx.fillStyle = `rgb(${i}, ${i}, ${i})`;
-      if (cellHeights[index] < (maxHeight - minHeight / 2)) {
-        ctx.fillStyle = 'skyblue';
+      // ctx.fillStyle = `rgb(${cellHeights[index]}, ${cellHeights[index]}, ${cellHeights[index]})`;
+      if (cellHeights[index] < avgHeight + 20) {
+        ctx.fillStyle = `rgb(54, 54, 97)`;
       } else {
-        ctx.fillStyle = 'green';
+        ctx.fillStyle = `rgb(65, 115, 108)`;
       }
       ctx.strokeStyle = '#333';
       ctx.beginPath();
@@ -200,7 +185,7 @@ class Map extends Component {
     renderMap(this.refs.board, {
       width: 1500,
       height: 700,
-      radius: 20,
+      radius: 10,
       drawEdges: false,
       drawNeighborNetwork: false,
       drawInnerEdges: false
