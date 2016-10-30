@@ -157,32 +157,28 @@ function renderMap(canvas, settings = {}) {
     );
   });
 
+  const contours = {
+    [seaLevelHeight - 20]: [30, 22, 75],
+    [seaLevelHeight - 20]: [38, 30, 75],
+    [seaLevelHeight - 10]: [44, 44, 87],
+    [seaLevelHeight]: [54, 54, 97],
+    [seaLevelHeight + 20]: [114, 156, 101],
+    [seaLevelHeight + 30]: [124, 160, 111],
+    [seaLevelHeight + 40]: [133, 169, 121],
+    [seaLevelHeight + 55]: [169, 185, 150],
+    [seaLevelHeight + 65]:[199, 216, 194],
+    [Infinity]: [211, 222, 210]
+  };
+
   const getColorAtPoint = _.memoize(function getColorAtPoint(point) {
     const h = getHeightAtPoint(point);
     let color;
 
-    if (h < seaLevelHeight - 20) {
-      color = [30, 22, 75];
-    } else if (h < seaLevelHeight - 20) {
-      color = [38, 30, 75];
-    } else if (h < seaLevelHeight - 10) {
-      color = [44, 44, 87];
-    } else if (h < seaLevelHeight) {
-      color = [54, 54, 97];
-    } else if(h < seaLevelHeight + 20) {
-      color = [114, 156, 101];
-    } else if(h < seaLevelHeight + 30) {
-      color = [124, 160, 111];
-    } else if(h < seaLevelHeight + 40) {
-      color = [133, 169, 121];
-    } else if(h < seaLevelHeight + 55) {
-      color = [169, 185, 150];
-    } else if(h < seaLevelHeight + 65) {
-      color = [199, 216, 194];
-    } else {
-      color = [211, 222, 210];
+    for (const height of Object.keys(contours)) {
+      if (h < height) {
+        return contours[height];
+      }
     }
-    return color;
   });
 
   function colorEdge() {
