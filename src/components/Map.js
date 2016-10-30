@@ -149,10 +149,19 @@ function renderMap(canvas, settings = {}) {
   const getColorAtPoint = _.memoize(function getColorAtPoint(point) {
     const h = getHeightAtPoint(point);
     let color;
-    if (h < seaLevelHeight) {
+
+    if (h < seaLevelHeight - 20) {
+      color = [30, 22, 75];
+    } else if (h < seaLevelHeight - 20) {
+      color = [38, 30, 75];
+    } else if (h < seaLevelHeight - 10) {
+      color = [44, 44, 87];
+    } else if (h < seaLevelHeight) {
       color = [54, 54, 97];
     } else if(h < seaLevelHeight + 20) {
       color = [114, 156, 101];
+    } else if(h < seaLevelHeight + 30) {
+      color = [124, 160, 111];
     } else if(h < seaLevelHeight + 40) {
       color = [133, 169, 121];
     } else if(h < seaLevelHeight + 55) {
@@ -165,6 +174,14 @@ function renderMap(canvas, settings = {}) {
     return color;
   });
 
+  function randomizeColor(color, range=1) {
+    return [
+      _.clamp(color[0] + _.random(-range, range), 0, 255),
+      _.clamp(color[1] + _.random(-range, range), 0, 255),
+      _.clamp(color[2] + _.random(-range, range), 0, 255)
+    ]
+  }
+
   function colorToRGB (color) {
     return `rgb(${color.map(c => c.toString()).join(', ')})`;
   }
@@ -175,7 +192,7 @@ function renderMap(canvas, settings = {}) {
       // let h = getHeightAtPoint(cell.site.x, cell.site.y);
       // h = parseInt(((h - minHeight) / maxHeight) * 255, 10)
       // const color = [h, h, h];
-      ctx.fillStyle = colorToRGB(color);
+      ctx.fillStyle = colorToRGB(randomizeColor(color));
       ctx.strokeStyle = ctx.fillStyle;
       ctx.beginPath();
       ctx.lineWidth = 1;
@@ -392,7 +409,7 @@ class Map extends Component {
       radius: 15,
       drawCells: true,
       drawTriangles: false,
-      drawEdges: true,
+      drawEdges: false,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
       drawCenterDot: false
