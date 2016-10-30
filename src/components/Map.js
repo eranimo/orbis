@@ -73,13 +73,27 @@ function drawArrow(ctx, fromx, fromy, tox, toy, r = 10){
 	ctx.fill();
 }
 
+function drawTriangle(ctx, p1, p2, p3, color) {
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.fill();
+  ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.strokeWidth = 1.5;
+  ctx.stroke();
+}
+
 
 function renderMap(canvas, settings = {}) {
   settings = Object.assign({}, {
     width: 500,
     heigth: 500,
     drawElevationArrows: false,
-    drawCell: true,
+    drawTriangles: true,
+    drawCells: true,
     drawEdges: true,
     drawNeighborNetwork: true,
     drawInnerEdges: true,
@@ -155,7 +169,7 @@ function renderMap(canvas, settings = {}) {
     return `rgb(${color.map(c => c.toString()).join(', ')})`;
   }
 
-  if (settings.drawCell) {
+  if (settings.drawCells) {
     diagram.cells.forEach((cell, index) => {
       const color = getColorAtPoint(new Point(cell.site.x, cell.site.y));
       // let h = getHeightAtPoint(cell.site.x, cell.site.y);
@@ -174,68 +188,6 @@ function renderMap(canvas, settings = {}) {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    });
-  }
-
-  // draw voronoi edges
-  if (settings.drawEdges) {
-    diagram.edges.forEach(edge => {
-      const leftHeight = getHeightAtPoint(new Point(edge.lSite.x, edge.lSite.y));
-      const rightHeight = edge.rSite ? getHeightAtPoint(new Point(edge.rSite.x, edge.rSite.y)) : Infinity;
-      let color;
-
-      // color lines between water cells like the cell color
-      if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
-        color = colorToRGB(getColorAtPoint(new Point(edge.lSite.x, edge.lSite.y)));
-      } else {
-        color = '#333';
-      }
-    	drawEdge(
-      	ctx,
-      	new Point(edge.va.x, edge.va.y),
-        new Point(edge.vb.x, edge.vb.y),
-        1,
-        color
-      );
-    });
-  }
-
-  // draw lines to neighbors
-  if (settings.drawNeighborNetwork) {
-    diagram.cells.forEach(cell => {
-      const neighbors = cell.getNeighborIds();
-      neighbors.forEach(index => {
-        const neighbor = diagram.cells[index];
-        drawEdge(
-          ctx,
-          new Point(cell.site.x, cell.site.y),
-          new Point(neighbor.site.x, neighbor.site.y),
-          1,
-          '#C0C0C0'
-        );
-      });
-    });
-  }
-
-  // for each cell, draw a line to its corners
-  if (settings.drawInnerEdges) {
-    diagram.cells.forEach(cell => {
-    	cell.halfedges.forEach(halfEdge => {
-      	drawEdge(
-        	ctx,
-          new Point(cell.site.x, cell.site.y),
-          new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
-          1,
-          'red'
-        );
-        drawEdge(
-        	ctx,
-          new Point(cell.site.x, cell.site.y),
-          new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
-          1,
-          'red'
-        );
-      });
     });
   }
 
@@ -328,21 +280,99 @@ function renderMap(canvas, settings = {}) {
   }
 
   // draw triangles, both on each side of each edge
-  // edges.forEach(edge => {
-  //   const center = new Point(
-  //     (edge.from.point.x + edge.to.point.x + edge.edge.lSite.x) / 3,
-  //     (edge.from.point.y + edge.to.point.y + edge.edge.lSite.y) / 3
-  //   );
-  //   const color = colorToRGB(getColorAtPoint(center));
-  //   ctx.fillStyle = color;
-  //   ctx.beginPath();
-  //   ctx.moveTo(edge.from.point.x, edge.from.point.y);
-  //   ctx.lineTo(center.x, center.y);
-  //   ctx.lineTo(edge.to.point.x, edge.to.point.y);
-  //   ctx.fill();
-  //   ctx.closePath();
-  // });
+  if (settings.drawTriangles) {
+    edges.forEach(edge => {
+      const center = new Point(
+        (edge.from.point.x + edge.to.point.x + edge.edge.lSite.x) / 3,
+        (edge.from.point.y + edge.to.point.y + edge.edge.lSite.y) / 3
+      );
+      const color = colorToRGB(getColorAtPoint(center));
+      // left side
+      if (edge.edge.lSite) {
+        drawTriangle(
+          ctx,
+          edge.from.point,
+          edge.edge.lSite,
+          edge.to.point,
+          color
+        );
+      }
+
+      // right side
+      if (edge.edge.rSite) {
+        drawTriangle(
+          ctx,
+          edge.from.point,
+          edge.edge.rSite,
+          edge.to.point,
+          color
+        );
+      }
+    });
+  }
   console.log(edges);
+
+
+  // draw lines to neighbors
+  if (settings.drawNeighborNetwork) {
+    diagram.cells.forEach(cell => {
+      const neighbors = cell.getNeighborIds();
+      neighbors.forEach(index => {
+        const neighbor = diagram.cells[index];
+        drawEdge(
+          ctx,
+          new Point(cell.site.x, cell.site.y),
+          new Point(neighbor.site.x, neighbor.site.y),
+          1,
+          '#C0C0C0'
+        );
+      });
+    });
+  }
+
+  // draw voronoi edges
+  if (settings.drawEdges) {
+    diagram.edges.forEach(edge => {
+      const leftHeight = getHeightAtPoint(new Point(edge.lSite.x, edge.lSite.y));
+      const rightHeight = edge.rSite ? getHeightAtPoint(new Point(edge.rSite.x, edge.rSite.y)) : Infinity;
+      let color;
+
+      // color lines between water cells like the cell color
+      // if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
+      //   color = colorToRGB(getColorAtPoint(new Point(edge.lSite.x, edge.lSite.y)));
+      // } else {
+      color = '#333';
+    	drawEdge(
+      	ctx,
+      	new Point(edge.va.x, edge.va.y),
+        new Point(edge.vb.x, edge.vb.y),
+        1,
+        color
+      );
+    });
+  }
+
+  // for each cell, draw a line to its corners
+  if (settings.drawInnerEdges) {
+    diagram.cells.forEach(cell => {
+    	cell.halfedges.forEach(halfEdge => {
+      	drawEdge(
+        	ctx,
+          new Point(cell.site.x, cell.site.y),
+          new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
+          0.5,
+          'red'
+        );
+        drawEdge(
+        	ctx,
+          new Point(cell.site.x, cell.site.y),
+          new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
+          0.5,
+          'red'
+        );
+      });
+    });
+  }
 }
 
 
@@ -360,6 +390,8 @@ class Map extends Component {
       width: 1500,
       height: 700,
       radius: 15,
+      drawCells: true,
+      drawTriangles: false,
       drawEdges: true,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
