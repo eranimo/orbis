@@ -22,6 +22,17 @@ class Point {
   	this.x = x;
     this.y = y;
   }
+
+  distanceTo(point) {
+    return Math.sqrt(Math.pow(point.x - this.x, 2) + Math.pow(point.y - this.y, 2));
+  }
+
+  between(point) {
+    return new Point(
+      (this.x + point.x) / 2,
+      (this.y + point.y) / 2
+    );
+  }
 }
 
 function drawDot(ctx, point, color = 'black') {
@@ -73,12 +84,12 @@ function drawArrow(ctx, fromx, fromy, tox, toy, r = 10){
 	ctx.fill();
 }
 
-function drawTriangle(ctx, p1, p2, p3, color) {
+function drawTriangle(ctx, p_from, p_cell, p_to, color) {
   ctx.beginPath();
   ctx.fillStyle = color;
-  ctx.moveTo(p1.x, p1.y);
-  ctx.lineTo(p2.x, p2.y);
-  ctx.lineTo(p3.x, p3.y);
+  ctx.moveTo(p_from.x, p_from.y);
+  ctx.lineTo(p_cell.x, p_cell.y);
+  ctx.lineTo(p_to.x, p_to.y);
   ctx.fill();
   ctx.closePath();
   ctx.strokeStyle = color;
@@ -174,6 +185,10 @@ function renderMap(canvas, settings = {}) {
     return color;
   });
 
+  function colorEdge() {
+    return [51, 102, 153]; // river
+  }
+
   function randomizeColor(color, range=1) {
     return [
       _.clamp(color[0] + _.random(-range, range), 0, 255),
@@ -184,6 +199,11 @@ function renderMap(canvas, settings = {}) {
 
   function colorToRGB (color) {
     return `rgb(${color.map(c => c.toString()).join(', ')})`;
+  }
+
+  function drawCellTriangle(ctx, p_from, p_cell, p_to, center) {
+    const color = colorToRGB(getColorAtPoint(center));
+    drawTriangle(ctx, p_from, p_cell, p_to, color);
   }
 
   if (settings.drawCells) {
@@ -303,26 +323,25 @@ function renderMap(canvas, settings = {}) {
         (edge.from.point.x + edge.to.point.x + edge.edge.lSite.x) / 3,
         (edge.from.point.y + edge.to.point.y + edge.edge.lSite.y) / 3
       );
-      const color = colorToRGB(getColorAtPoint(center));
       // left side
       if (edge.edge.lSite) {
-        drawTriangle(
+        drawCellTriangle(
           ctx,
           edge.from.point,
           edge.edge.lSite,
           edge.to.point,
-          color
+          center
         );
       }
 
       // right side
       if (edge.edge.rSite) {
-        drawTriangle(
+        drawCellTriangle(
           ctx,
           edge.from.point,
           edge.edge.rSite,
           edge.to.point,
-          color
+          center
         );
       }
     });
@@ -358,7 +377,7 @@ function renderMap(canvas, settings = {}) {
       // if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
       //   color = colorToRGB(getColorAtPoint(new Point(edge.lSite.x, edge.lSite.y)));
       // } else {
-      color = '#333';
+      color = '#111';
     	drawEdge(
       	ctx,
       	new Point(edge.va.x, edge.va.y),
@@ -409,7 +428,7 @@ class Map extends Component {
       radius: 15,
       drawCells: true,
       drawTriangles: false,
-      drawEdges: false,
+      drawEdges: true,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
       drawCenterDot: false
