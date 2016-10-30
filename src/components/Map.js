@@ -412,21 +412,20 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
-
-    if (settings.drawHeightMarkers) {
-      edges.forEach(edge => {
-        if (getHeightAtPoint(edge.center) >= seaLevelHeight) {
-          ctx.font = '6px Fira Code';
-          ctx.fillStyle = 'white';
-          ctx.textAlign = "center";
-          ctx.fillText(
-            _.round(getHeightAtPoint(edge.center), 1),
-            edge.center.x,
-            edge.center.y
-          );
-        }
-      });
-    }
+  if (settings.drawHeightMarkers) {
+    edges.forEach(edge => {
+      if (getHeightAtPoint(edge.center) >= seaLevelHeight) {
+        ctx.font = '6px Fira Code';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = "center";
+        ctx.fillText(
+          _.round(getHeightAtPoint(edge.center), 1),
+          edge.center.x,
+          edge.center.y
+        );
+      }
+    });
+  }
 }
 
 
