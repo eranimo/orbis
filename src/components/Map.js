@@ -112,7 +112,7 @@ function renderMap(canvas, settings = {}) {
     drawHeightMarkers: false,
     radius: 10
   }, settings);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
 
   canvas.width = settings.width;
   canvas.height = settings.height;
@@ -231,22 +231,10 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
-  if (settings.drawHeightMarkers) {
-    diagram.cells.forEach((cell, index) => {
-      ctx.font = '8px Fira Code';
-      ctx.fillStyle = 'rgba(200, 200, 200, 0.75)';
-      ctx.textAlign = "center";
-      ctx.fillText(
-        _.round(getHeightAtPoint(new Point(cell.site.x, cell.site.y)), 1),
-        cell.site.x,
-        cell.site.y
-      );
-    });
-  }
-
   class Edge {
     constructor(edge) {
       this.edge = edge;
+      this.water = 1;
     }
   }
   let edges = [];
@@ -261,6 +249,16 @@ function renderMap(canvas, settings = {}) {
 
   let corners = [];
   let cornersByPoint = {};
+  let cornerEdges = []; // 2D array of corner coordinates (x, y) to array of edges
+  function addCornerEdge(corner, edge) {
+    if (!cornerEdges[corner.point.x]) {
+      cornerEdges[corner.point.x] = [];
+    }
+    if (!cornerEdges[corner.point.x][corner.point.y]) {
+      cornerEdges[corner.point.x][corner.point.y] = [];
+    }
+    cornerEdges[corner.point.x][corner.point.y].push(edge);
+  }
   diagram.edges.forEach((edge, index) => {
     edges[index] = new Edge(edge);
     // drawDot(ctx, new Point(edge.va.x, edge.va.y), 'yellow');
@@ -287,6 +285,8 @@ function renderMap(canvas, settings = {}) {
       edges[index].up = cornerFrom;
       edges[index].down = cornerTo;
     }
+    addCornerEdge(cornerTo, edges[index]);
+    addCornerEdge(cornerFrom, edges[index]);
 
     edges[index].center = new Point(
       (edges[index].from.point.x + edges[index].to.point.x) / 2,
@@ -295,6 +295,11 @@ function renderMap(canvas, settings = {}) {
   });
   // clean up broken edges
   edges = edges.filter(edge => Object.keys(edge).length > 2);
+
+  edges = edges.map(edge => {
+    edge.downstream = cornerEdges[edge.down.point.x][edge.down.point.y];
+    return edge;
+  });
 
   if (settings.drawElevationArrows) {
     ctx.fillStyle = 'black';
@@ -342,6 +347,7 @@ function renderMap(canvas, settings = {}) {
       }
     });
   }
+  console.log(cornerEdges);
   console.log(edges);
 
 
@@ -405,6 +411,22 @@ function renderMap(canvas, settings = {}) {
       });
     });
   }
+
+
+    if (settings.drawHeightMarkers) {
+      edges.forEach(edge => {
+        if (getHeightAtPoint(edge.center) >= seaLevelHeight) {
+          ctx.font = '6px Fira Code';
+          ctx.fillStyle = 'white';
+          ctx.textAlign = "center";
+          ctx.fillText(
+            _.round(getHeightAtPoint(edge.center), 1),
+            edge.center.x,
+            edge.center.y
+          );
+        }
+      });
+    }
 }
 
 
@@ -425,6 +447,7 @@ class Map extends Component {
       drawCells: true,
       drawTriangles: false,
       drawEdges: true,
+      drawElevationArrows: true,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
       drawCenterDot: false
