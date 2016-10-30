@@ -202,28 +202,6 @@ function renderMap(canvas, settings = {}) {
     drawTriangle(ctx, p_from, p_cell, p_to, color);
   }
 
-  if (settings.drawCells) {
-    diagram.cells.forEach((cell, index) => {
-      const color = getColorAtPoint(new Point(cell.site.x, cell.site.y));
-      // let h = getHeightAtPoint(cell.site.x, cell.site.y);
-      // h = parseInt(((h - minHeight) / maxHeight) * 255, 10)
-      // const color = [h, h, h];
-      ctx.fillStyle = colorToRGB(randomizeColor(color));
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.beginPath();
-      ctx.lineWidth = 1;
-      const start = cell.halfedges[0].getStartpoint();
-      ctx.moveTo(start.x, start.y);
-      cell.halfedges.forEach((halfEdge, index) => {
-        const end = halfEdge.getEndpoint();
-        ctx.lineTo(end.x, end.y);
-      });
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    });
-  }
-
   // draw cell centers in red
   if (settings.drawCenterDot) {
     diagram.cells.forEach(cell => {
@@ -294,12 +272,103 @@ function renderMap(canvas, settings = {}) {
     );
   });
   // clean up broken edges
-  edges = edges.filter(edge => Object.keys(edge).length > 2);
+  edges = edges.filter(edge => Object.keys(edge).includes('down'));
 
   edges = edges.map(edge => {
     edge.downstream = cornerEdges[edge.down.point.x][edge.down.point.y];
     return edge;
   });
+
+  let cells = []; // index matches voronoiId
+  class Cell {
+    constructor(cell, voronoiId, center, height, type) {
+      this.voronoiId = voronoiId;
+      this.center = center;
+      this.type = type;
+      this.height = height;
+      this.distanceFromCoast = 0;
+      this.visited = false;
+      this.voronoiCell = cell;
+    }
+  }
+  // make Cell instances
+  diagram.cells.forEach((cell, index) => {
+    const center = new Point(cell.site.x, cell.site.y);
+    const height = getHeightAtPoint(center);
+    const type = height < seaLevelHeight ? 'ocean' : 'land';
+    cells.push(new Cell(cell, index, center, height, type));
+  });
+
+  cells = cells.map(cell => {
+    cell.neighbors = cell.voronoiCell.getNeighborIds().map(index => cells[index]);
+    return cell;
+  });
+
+  // associate Edges with Cells
+  edges = edges.map(edge => {
+    edge.left = cells[edge.edge.lSite.voronoiId];
+    if (edge.edge.rSite) {
+      edge.right = cells[edge.edge.rSite.voronoiId];
+    }
+    return edge;
+  });
+
+
+  // compute distance from coast
+  function step(cells, d) {
+    cells.forEach(neighbor => {
+      if (neighbor.visited !== true && neighbor.type === 'land') {
+        // const lowest = _.min(neighbor.neighbors.filter(cell => cell.visited).map(cell => cell.distanceFromCoast));
+        neighbor.distanceFromCoast = d + 1;
+        neighbor.visited = true;
+        step(neighbor.neighbors, d + 1);
+      }
+    });
+  }
+  cells = cells
+    .map(cell => {
+      if (cell.type === 'land') {
+        const numberOcean = cell.neighbors.filter(cell => cell.type === 'ocean');
+        if (numberOcean.length > 0) {
+          cell.distanceFromCoast = 1;
+          cell.visited = true;
+          step(cell.neighbors, 1);
+        }
+      }
+      return cell;
+    });
+
+
+  if (settings.drawCells) {
+    cells.forEach(cell => {
+      const color = getColorAtPoint(cell.center);
+      ctx.fillStyle = colorToRGB(randomizeColor(color));
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      const start = cell.voronoiCell.halfedges[0].getStartpoint();
+      ctx.moveTo(start.x, start.y);
+      cell.voronoiCell.halfedges.forEach((halfEdge, index) => {
+        const end = halfEdge.getEndpoint();
+        ctx.lineTo(end.x, end.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // draw distanceFromCoast number
+      ctx.font = '10px Fira Code';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = "center";
+      ctx.fillText(
+        cell.distanceFromCoast || 0,
+        cell.center.x,
+        cell.center.y
+      );
+    });
+  }
+
+
 
   if (settings.drawElevationArrows) {
     ctx.fillStyle = 'black';
@@ -446,7 +515,7 @@ class Map extends Component {
       drawCells: true,
       drawTriangles: false,
       drawEdges: true,
-      drawElevationArrows: true,
+      drawElevationArrows: false,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
       drawCenterDot: false
