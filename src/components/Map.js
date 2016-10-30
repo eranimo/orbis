@@ -132,12 +132,8 @@ function renderMap(canvas, settings = {}) {
     );
   });
 
-  const getCellHeight = _.memoize(function getHeight(x, y) {
-    return getHeightAtPoint(new Point(x, y));
-  });
-
-  const getColorForCell = _.memoize(function getColorForCell(x, y) {
-    const h = getCellHeight(x, y);
+  const getColorAtPoint = _.memoize(function getColorAtPoint(point) {
+    const h = getHeightAtPoint(point);
     let color;
     if (h < seaLevelHeight) {
       color = [54, 54, 97];
@@ -161,8 +157,8 @@ function renderMap(canvas, settings = {}) {
 
   if (settings.drawCell) {
     diagram.cells.forEach((cell, index) => {
-      const color = getColorForCell(cell.site.x, cell.site.y)
-      // let h = getCellHeight(cell.site.x, cell.site.y);
+      const color = getColorAtPoint(new Point(cell.site.x, cell.site.y));
+      // let h = getHeightAtPoint(cell.site.x, cell.site.y);
       // h = parseInt(((h - minHeight) / maxHeight) * 255, 10)
       // const color = [h, h, h];
       ctx.fillStyle = colorToRGB(color);
@@ -184,13 +180,13 @@ function renderMap(canvas, settings = {}) {
   // draw voronoi edges
   if (settings.drawEdges) {
     diagram.edges.forEach(edge => {
-      const leftHeight = getCellHeight(edge.lSite.x, edge.lSite.y);
-      const rightHeight = edge.rSite ? getCellHeight(edge.rSite.x, edge.rSite.y) : Infinity;
+      const leftHeight = getHeightAtPoint(new Point(edge.lSite.x, edge.lSite.y));
+      const rightHeight = edge.rSite ? getHeightAtPoint(new Point(edge.rSite.x, edge.rSite.y)) : Infinity;
       let color;
 
       // color lines between water cells like the cell color
       if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
-        color = colorToRGB(getColorForCell(edge.lSite.x, edge.rSite.y));
+        color = colorToRGB(getColorAtPoint(new Point(edge.lSite.x, edge.lSite.y)));
       } else {
         color = '#333';
       }
@@ -229,15 +225,15 @@ function renderMap(canvas, settings = {}) {
         	ctx,
           new Point(cell.site.x, cell.site.y),
           new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
-          0.1,
-          'green'
+          1,
+          'red'
         );
         drawEdge(
         	ctx,
           new Point(cell.site.x, cell.site.y),
           new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
-          0.1,
-          'green'
+          1,
+          'red'
         );
       });
     });
@@ -256,7 +252,7 @@ function renderMap(canvas, settings = {}) {
       ctx.fillStyle = 'rgba(200, 200, 200, 0.75)';
       ctx.textAlign = "center";
       ctx.fillText(
-        _.round(getCellHeight(cell.site.x, cell.site.y), 1),
+        _.round(getHeightAtPoint(new Point(cell.site.x, cell.site.y)), 1),
         cell.site.x,
         cell.site.y
       );
@@ -270,11 +266,6 @@ function renderMap(canvas, settings = {}) {
   }
   let edges = [];
 
-  diagram.edges.forEach((edge, index) => {
-    const edgeObj = new Edge(edge);
-    edges[index] = edgeObj;
-  });
-
   class Corner {
     constructor(point, index) {
       this.point = point;
@@ -286,6 +277,7 @@ function renderMap(canvas, settings = {}) {
   let corners = [];
   let cornersByPoint = {};
   diagram.edges.forEach((edge, index) => {
+    edges[index] = new Edge(edge);
     // drawDot(ctx, new Point(edge.va.x, edge.va.y), 'yellow');
     const cornerFrom = new Corner(new Point(edge.va.x, edge.va.y), index);
     corners.push(cornerFrom);
@@ -334,6 +326,22 @@ function renderMap(canvas, settings = {}) {
       }
     });
   }
+
+  // draw triangles, both on each side of each edge
+  // edges.forEach(edge => {
+  //   const center = new Point(
+  //     (edge.from.point.x + edge.to.point.x + edge.edge.lSite.x) / 3,
+  //     (edge.from.point.y + edge.to.point.y + edge.edge.lSite.y) / 3
+  //   );
+  //   const color = colorToRGB(getColorAtPoint(center));
+  //   ctx.fillStyle = color;
+  //   ctx.beginPath();
+  //   ctx.moveTo(edge.from.point.x, edge.from.point.y);
+  //   ctx.lineTo(center.x, center.y);
+  //   ctx.lineTo(edge.to.point.x, edge.to.point.y);
+  //   ctx.fill();
+  //   ctx.closePath();
+  // });
   console.log(edges);
 }
 
