@@ -1,10 +1,10 @@
 import nj from 'numjs';
 import _ from 'lodash';
 import Random from 'random-js';
-// import ds from 'datastructures-js';
-// import nextafter from 'nextafter';
+import ds from 'datastructures-js';
+import nextafter from 'nextafter';
 
-export default class HeightMap {
+export default class DiamondSquare {
 
   constructor(options) {
     // prepare the grid
@@ -66,12 +66,9 @@ export default class HeightMap {
 
     this.grid = this.grid.T;
 
-    // console.time('depression fill');
-    // this.fillDepressions();
-    // console.log(nj.images.resize);
-    // this.grid = nj.images.resize(this.grid, this.finalSize, this.finalSize);
-    // console.log(this.grid);
-    // console.timeEnd('depression fill');
+    console.time('depression fill');
+    this.fillDepressions();
+    console.timeEnd('depression fill');
   }
 
   // gets the x and y coordinate of a cell's 4-neighbor

@@ -11,7 +11,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "datastructures-js": "^3.0.5",
     "lodash": "^4.16.4",
+    "ndarray-linear-interpolate": "^1.0.0",
+    "nextafter": "^1.0.0",
     "numjs": "^0.11.5",
     "perlin-simplex": "0.0.2",
     "random-js": "^1.0.8",

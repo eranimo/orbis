@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import poissonDiscSampler from '../utils/poissonDisk';
 import Voronoi from 'voronoi';
 import _ from 'lodash';
-import Simplex from 'perlin-simplex';
+import DiamondSquare from '../utils/diamondSquare.js';
 
 
 function getDots(sampler) {
@@ -52,6 +52,7 @@ function renderMap(canvas, settings = {}) {
     drawNeighborNetwork: true,
     drawInnerEdges: true,
     drawCenterDot: true,
+    drawHeightMarkers: false,
     radius: 10
   }, settings);
   const ctx = canvas.getContext('2d');
@@ -76,27 +77,62 @@ function renderMap(canvas, settings = {}) {
   console.timeEnd('voronoi computing');
 
   console.log(diagram);
-  const simplex = new Simplex();
 
-  let cellHeights = [];
-  diagram.cells.forEach((cell, index) => {
-    cellHeights[index] = (1 + simplex.noise(
-      parseInt(cell.site.x, 10),
-      parseInt(cell.site.y, 10)
-    )) * 100;
+  console.time('diamond square');
+  // console.profile('diamond square');
+  const HEIGHTMAP_SIZE = 256;
+  const smallerHeightmap = new DiamondSquare({
+    size: HEIGHTMAP_SIZE
   });
-  const avgHeight = _.mean(cellHeights);
-  console.log(cellHeights);
+  smallerHeightmap.generate();
+  console.log(smallerHeightmap);
+  // console.profileEnd('diamond square');
+  console.timeEnd('diamond square');
+
+  const seaLevelHeight = smallerHeightmap.grid.mean()
+  const minHeight = smallerHeightmap.grid.min()
+  const maxHeight = smallerHeightmap.grid.max()
+
+  function getHeight(x, y) {
+    return smallerHeightmap.get(
+      Math.floor(x / (settings.width / HEIGHTMAP_SIZE * 2)),
+      Math.floor(y / (settings.height / HEIGHTMAP_SIZE * 2))
+    );
+  }
+  const getHeightMemoized = _.memoize(getHeight);
+
+  function getColorFor(x, y) {
+    const h = getHeightMemoized(x, y);
+    let color;
+    if (h < seaLevelHeight) {
+      color = [54, 54, 97];
+    } else if(h < seaLevelHeight + 20) {
+      color = [114, 156, 101];
+    } else if(h < seaLevelHeight + 40) {
+      color = [133, 169, 121];
+    } else if(h < seaLevelHeight + 55) {
+      color = [169, 185, 150];
+    } else if(h < seaLevelHeight + 65) {
+      color = [199, 216, 194];
+    } else {
+      color = [211, 222, 210];
+    }
+    return color;
+  }
+  const getColorForMemoized = _.memoize(getColorFor);
+
+  function colorToRGB (color) {
+    return `rgb(${color.map(c => c.toString()).join(', ')})`;
+  }
 
   if (settings.drawCell) {
     diagram.cells.forEach((cell, index) => {
-      // ctx.fillStyle = `rgb(${cellHeights[index]}, ${cellHeights[index]}, ${cellHeights[index]})`;
-      if (cellHeights[index] < avgHeight + 20) {
-        ctx.fillStyle = `rgb(54, 54, 97)`;
-      } else {
-        ctx.fillStyle = `rgb(65, 115, 108)`;
-      }
-      ctx.strokeStyle = '#333';
+      const color = getColorForMemoized(cell.site.x, cell.site.y)
+      // let h = getHeightMemoized(cell.site.x, cell.site.y);
+      // h = parseInt(((h - minHeight) / maxHeight) * 255, 10)
+      // const color = [h, h, h];
+      ctx.fillStyle = colorToRGB(color);
+      ctx.strokeStyle = ctx.fillStyle;
       ctx.beginPath();
       ctx.lineWidth = 1;
       const start = cell.halfedges[0].getStartpoint();
@@ -114,12 +150,22 @@ function renderMap(canvas, settings = {}) {
   // draw voronoi edges
   if (settings.drawEdges) {
     diagram.edges.forEach(edge => {
+      const leftHeight = getHeightMemoized(edge.lSite.x, edge.lSite.y);
+      const rightHeight = edge.rSite ? getHeightMemoized(edge.rSite.x, edge.rSite.y) : Infinity;
+      let color;
+
+      // color lines between water cells like the cell color
+      if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
+        color = colorToRGB(getColorForMemoized(edge.lSite.x, edge.rSite.y));
+      } else {
+        color = '#333';
+      }
     	drawEdge(
       	ctx,
       	new Point(edge.va.x, edge.va.y),
         new Point(edge.vb.x, edge.vb.y),
         1,
-        '#333'
+        color
       );
     });
   }
@@ -169,6 +215,19 @@ function renderMap(canvas, settings = {}) {
   		drawDot(ctx, new Point(cell.site.x, cell.site.y), 'red');
     });
   }
+
+  if (settings.drawHeightMarkers) {
+    diagram.cells.forEach((cell, index) => {
+      ctx.font = '8px Fira Code';
+      ctx.fillStyle = 'rgba(200, 200, 200, 0.75)';
+      ctx.textAlign = "center";
+      ctx.fillText(
+        _.round(getHeightMemoized(cell.site.x, cell.site.y), 1),
+        cell.site.x,
+        cell.site.y
+      );
+    });
+  }
 }
 
 
@@ -185,10 +244,11 @@ class Map extends Component {
     renderMap(this.refs.board, {
       width: 1500,
       height: 700,
-      radius: 10,
-      drawEdges: false,
+      radius: 15,
+      drawEdges: true,
       drawNeighborNetwork: false,
-      drawInnerEdges: false
+      drawInnerEdges: false,
+      drawCenterDot: false
     });
     console.timeEnd('total draw');
     console.groupEnd();
