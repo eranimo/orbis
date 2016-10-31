@@ -3,8 +3,6 @@ import poissonDiscSampler from '../utils/poissonDisk';
 import Voronoi from 'voronoi';
 import _ from 'lodash';
 import DiamondSquare from '../utils/diamondSquare.js';
-import ds from 'datastructures-js';
-import math from 'mathjs';
 import { curve } from 'cardinal-spline-js/curve_func.js';
 
 function getDots(sampler) {

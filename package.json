@@ -14,8 +14,6 @@
     "cardinal-spline-js": "^2.3.6",
     "datastructures-js": "^3.0.5",
     "lodash": "^4.16.4",
-    "mathjs": "^3.6.0",
-    "ndarray-linear-interpolate": "^1.0.0",
     "nextafter": "^1.0.0",
     "numjs": "^0.11.5",
     "perlin-simplex": "0.0.2",
