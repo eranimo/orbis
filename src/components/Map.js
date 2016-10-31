@@ -3,7 +3,7 @@ import poissonDiscSampler from '../utils/poissonDisk';
 import Voronoi from 'voronoi';
 import _ from 'lodash';
 import DiamondSquare from '../utils/diamondSquare.js';
-
+import ds from 'datastructures-js';
 
 function getDots(sampler) {
 	const dots = [];
@@ -170,15 +170,16 @@ function renderMap(canvas, settings = {}) {
     [Infinity]: [211, 222, 210]
   };
 
-  const getColorAtPoint = _.memoize(function getColorAtPoint(point) {
-    const h = getHeightAtPoint(point);
-    let color;
-
+  const getColorForHeight = _.memoize(function getColorForHeight(h) {
     for (const height of Object.keys(contours)) {
       if (h < height) {
         return contours[height];
       }
     }
+  });
+
+  const getColorAtPoint = _.memoize(function getColorAtPoint(point) {
+    return getColorForHeight(getHeightAtPoint(point));
   });
 
   function colorEdge() {
@@ -287,8 +288,9 @@ function renderMap(canvas, settings = {}) {
       this.type = type;
       this.height = height;
       this.distanceFromCoast = 0;
-      this.visited = false;
       this.voronoiCell = cell;
+      this.coastal = false;
+      //neighbors
     }
   }
   // make Cell instances
@@ -301,6 +303,9 @@ function renderMap(canvas, settings = {}) {
 
   cells = cells.map(cell => {
     cell.neighbors = cell.voronoiCell.getNeighborIds().map(index => cells[index]);
+    if (cell.type === 'land' && cell.neighbors.filter(c => c.type === 'ocean').length > 0) {
+      cell.coastal = true;
+    }
     return cell;
   });
 
@@ -313,35 +318,45 @@ function renderMap(canvas, settings = {}) {
     return edge;
   });
 
-
-  // compute distance from coast
-  function step(cells, d) {
-    cells.forEach(neighbor => {
-      if (neighbor.visited !== true && neighbor.type === 'land') {
-        // const lowest = _.min(neighbor.neighbors.filter(cell => cell.visited).map(cell => cell.distanceFromCoast));
-        neighbor.distanceFromCoast = d + 1;
-        neighbor.visited = true;
-        step(neighbor.neighbors, d + 1);
-      }
-    });
+  function computeDistanceFromCoast() {
+    let coastal = new Set(cells.filter(c => c.coastal));
+    let visited = {};
+    coastal.forEach(c => {
+      c.distanceFromCoast = 1;
+      visited[c.voronoiId] = true;
+    })
+    let activeCellsSet = new Set(_.flatten(Array.from(coastal).map(c => c.neighbors).filter(c => !visited[c.voronoiId])));
+    console.log(activeCellsSet);
+    let distance = 0;
+    while(activeCellsSet.size > 0) {
+      distance += 1;
+      let neighborsSet = new Set();
+      activeCellsSet.forEach(cell => {
+        if (cell.type === 'ocean') return;
+        visited[cell.voronoiId] = true;
+        cell.distanceFromCoast = distance;
+        cell.neighbors.forEach(n => {
+          if (n.type === 'land' && !visited[n.voronoiId]) {
+            neighborsSet.add(n);
+          }
+        });
+      });
+      activeCellsSet.clear();
+      activeCellsSet = neighborsSet;
+    }
   }
-  cells = cells
-    .map(cell => {
-      if (cell.type === 'land') {
-        const numberOcean = cell.neighbors.filter(cell => cell.type === 'ocean');
-        if (numberOcean.length > 0) {
-          cell.distanceFromCoast = 1;
-          cell.visited = true;
-          step(cell.neighbors, 1);
-        }
-      }
-      return cell;
-    });
+  computeDistanceFromCoast();
 
+  cells = cells.map(cell => {
+    if (cell.type === 'land') {
+      cell.height = seaLevelHeight + (cell.distanceFromCoast * 5 + _.random(1.0, 2.9));
+    }
+    return cell;
+  });
 
   if (settings.drawCells) {
     cells.forEach(cell => {
-      const color = getColorAtPoint(cell.center);
+      const color = getColorForHeight(cell.height);
       ctx.fillStyle = colorToRGB(randomizeColor(color));
       ctx.strokeStyle = ctx.fillStyle;
       ctx.beginPath();
@@ -355,16 +370,6 @@ function renderMap(canvas, settings = {}) {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-
-      // draw distanceFromCoast number
-      ctx.font = '10px Fira Code';
-      ctx.fillStyle = 'white';
-      ctx.textAlign = "center";
-      ctx.fillText(
-        cell.distanceFromCoast || 0,
-        cell.center.x,
-        cell.center.y
-      );
     });
   }
 
@@ -444,10 +449,6 @@ function renderMap(canvas, settings = {}) {
       const rightHeight = edge.rSite ? getHeightAtPoint(new Point(edge.rSite.x, edge.rSite.y)) : Infinity;
       let color;
 
-      // color lines between water cells like the cell color
-      // if (leftHeight < seaLevelHeight && rightHeight < seaLevelHeight) {
-      //   color = colorToRGB(getColorAtPoint(new Point(edge.lSite.x, edge.lSite.y)));
-      // } else {
       color = '#111';
     	drawEdge(
       	ctx,
@@ -482,17 +483,31 @@ function renderMap(canvas, settings = {}) {
   }
 
   if (settings.drawHeightMarkers) {
-    edges.forEach(edge => {
-      if (getHeightAtPoint(edge.center) >= seaLevelHeight) {
-        ctx.font = '6px Fira Code';
+    cells.forEach(cell => {
+      if (cell.height >= seaLevelHeight) {
+        ctx.font = '8px Fira Code';
         ctx.fillStyle = 'white';
         ctx.textAlign = "center";
         ctx.fillText(
-          _.round(getHeightAtPoint(edge.center), 1),
-          edge.center.x,
-          edge.center.y
+          _.round(cell.height - seaLevelHeight, 1),
+          cell.center.x,
+          cell.center.y + 5
         );
       }
+    });
+  }
+
+  if (settings.drawDistanceFromCoast) {
+    cells.forEach(cell => {
+      // draw distanceFromCoast number
+      ctx.font = '8px Fira Code';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = "center";
+      ctx.fillText(
+        _.round(cell.distanceFromCoast, 1) || '',
+        cell.center.x,
+        cell.center.y + 5
+      );
     });
   }
 }
@@ -515,6 +530,7 @@ class Map extends Component {
       drawCells: true,
       drawTriangles: false,
       drawEdges: true,
+      drawHeightMarkers: true,
       drawElevationArrows: false,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
