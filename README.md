@@ -9,3 +9,12 @@ Each cell is given 1 water point. For each cell, all cell water points are moved
 ## Example
 ![Image 1](http://i.imgur.com/0pJsCcZ.png)
 ![Image 2](http://i.imgur.com/YdwqWYd.png)
+
+
+
+## To Do
+- [ ] Move rivers to the cell edges
+- [ ] Temperature
+- [ ] Biomes
+- [ ] Wind ?
+- [ ] Pressure ?
