@@ -4,6 +4,8 @@ import Voronoi from 'voronoi';
 import _ from 'lodash';
 import DiamondSquare from '../utils/diamondSquare.js';
 import ds from 'datastructures-js';
+import math from 'mathjs';
+import { curve } from 'cardinal-spline-js/curve_func.js';
 
 function getDots(sampler) {
 	const dots = [];
@@ -35,9 +37,9 @@ class Point {
   }
 }
 
-function drawDot(ctx, point, color = 'black') {
+function drawDot(ctx, point, color = 'black', size = 1) {
   ctx.beginPath();
-  ctx.arc(point.x + 0.5, point.y + 0.5, 1, 0, 2 * Math.PI, false);
+  ctx.arc(point.x + 0.5, point.y + 0.5, size, 0, 2 * Math.PI, false);
   ctx.fillStyle = color;
   ctx.fill();
   ctx.closePath();
@@ -112,7 +114,7 @@ function renderMap(canvas, settings = {}) {
     drawHeightMarkers: false,
     radius: 10
   }, settings);
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d');
 
   canvas.width = settings.width;
   canvas.height = settings.height;
@@ -290,6 +292,8 @@ function renderMap(canvas, settings = {}) {
       this.distanceFromCoast = 0;
       this.voronoiCell = cell;
       this.coastal = false;
+      this.water = type === 'land' ? 1 : 0;
+      this.flow = type === 'land' ? 1 : 0;
       //neighbors
     }
   }
@@ -353,6 +357,42 @@ function renderMap(canvas, settings = {}) {
     }
     return cell;
   });
+
+  // river flow
+  while(_.sumBy(cells, 'flow') > 0) {
+    cells.forEach(cell => {
+      const found = _.sortBy(cell.neighbors, 'height')[0];
+      if (found.type === 'land') {
+        found.water += cell.water;
+        found.flow += cell.flow;
+        cell.downstream = found;
+        cell.flow = 0;
+      } else { // drain in the ocean
+        cell.downstream = found;
+        cell.flow = 0;
+      }
+    });
+  }
+
+  let rivers = [];
+  cells.forEach(cell => {
+    if (cell.water > 500 && cell.downstream) {
+      let active = cell.downstream;
+      let segments = [cell.downstream];
+      while(true) {
+        if (active.type === 'land' && active.downstream) {
+          segments.push(active.downstream);
+          active = active.downstream;
+        } else {
+          break;
+        }
+      }
+      rivers.push(segments);
+    }
+  });
+  console.log('rivers', rivers);
+
+
 
   if (settings.drawCells) {
     cells.forEach(cell => {
@@ -510,6 +550,53 @@ function renderMap(canvas, settings = {}) {
       );
     });
   }
+
+  if (settings.drawRivers) {
+    rivers.forEach(segments => {
+      if (segments.length < 3) return;
+      const {center, water} = segments[0];
+      ctx.beginPath();
+      ctx.strokeStyle = 'blue';
+      ctx.moveTo(center.x, center.y);
+      const points = [];
+      for (let i = 1; i < segments.length - 1; i++) {
+        const seg = segments[i];
+        // ctx.lineTo(seg.center.x, seg.center.y);
+        points.push(seg.center.x, seg.center.y);
+      }
+      const riverDelta = _.nth(segments, -2);
+      const end = _.last(segments);
+      // ctx.lineTo(
+      //   (riverDelta.center.x + end.center.x) / 2,
+      //   (riverDelta.center.y + end.center.y) / 2
+      // );
+      points.push(
+        (riverDelta.center.x + end.center.x) / 2,
+        (riverDelta.center.y + end.center.y) / 2
+      );
+      curve(ctx, points);
+      ctx.stroke();
+      ctx.closePath();
+    });
+  }
+
+  if (settings.drawCellWaterAmount) {
+    cells.forEach(cell => {
+      if (cell.water > 1000) {
+        drawDot(ctx, cell.center, 'rbga(0, 255, 0, 0.75)', 7);
+      }
+
+      // draw distanceFromCoast number
+      ctx.font = '10px Fira Code';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = "center";
+      ctx.fillText(
+        cell.water,
+        cell.center.x,
+        cell.center.y + 5
+      );
+    });
+  }
 }
 
 
@@ -527,10 +614,12 @@ class Map extends Component {
       width: 1500,
       height: 700,
       radius: 15,
+      drawRivers: true,
       drawCells: true,
       drawTriangles: false,
       drawEdges: true,
-      drawHeightMarkers: true,
+      drawCellWaterAmount: false,
+      drawHeightMarkers: false,
       drawElevationArrows: false,
       drawNeighborNetwork: false,
       drawInnerEdges: false,
