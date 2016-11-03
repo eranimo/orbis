@@ -1,9 +1,13 @@
+/* @flow */
 import React, { Component } from 'react';
 import poissonDiscSampler from '../utils/poissonDisk';
 import Voronoi from 'voronoi';
 import _ from 'lodash';
 import DiamondSquare from '../utils/diamondSquare.js';
 import { curve } from 'cardinal-spline-js/curve_func.js';
+import Point from './point';
+import { drawDot, drawEdge, drawArrow, drawTriangle } from './draw';
+
 
 function getDots(sampler) {
 	const dots = [];
@@ -17,86 +21,15 @@ function getDots(sampler) {
   }
 }
 
-class Point {
-	constructor(x, y) {
-  	this.x = x;
-    this.y = y;
+function guid() {
+  function s4() {
+    return Math.floor((1 + Math.random()) * 0x10000)
+      .toString(16)
+      .substring(1);
   }
-
-  distanceTo(point) {
-    return Math.sqrt(Math.pow(point.x - this.x, 2) + Math.pow(point.y - this.y, 2));
-  }
-
-  between(point) {
-    return new Point(
-      (this.x + point.x) / 2,
-      (this.y + point.y) / 2
-    );
-  }
+  return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+    s4() + '-' + s4() + s4() + s4();
 }
-
-function drawDot(ctx, point, color = 'black', size = 1) {
-  ctx.beginPath();
-  ctx.arc(point.x + 0.5, point.y + 0.5, size, 0, 2 * Math.PI, false);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.closePath();
-}
-
-function drawEdge(ctx, p1, p2, width = 1, style = 'black') {
-	ctx.beginPath();
-  ctx.moveTo(parseInt(p1.x, 10) + 0.5, parseInt(p1.y, 10) + 0.5);
-  ctx.lineTo(parseInt(p2.x, 10) + 0.5, parseInt(p2.y, 10) + 0.5);
-  ctx.lineWidth = width;
-  ctx.strokeStyle = style;
-  ctx.stroke();
-  ctx.closePath();
-}
-
-function drawArrow(ctx, fromx, fromy, tox, toy, r = 10){
-	let x_center = tox;
-	let y_center = toy;
-
-	let angle;
-	let x;
-	let y;
-
-	ctx.beginPath();
-
-	angle = Math.atan2(toy - fromy, tox - fromx)
-	x = 2 * r * Math.cos(angle) + x_center;
-	y = 2 * r * Math.sin(angle) + y_center;
-
-	ctx.moveTo(x, y);
-
-	angle += (1 / 3) * (2 * Math.PI)
-	x = r * Math.cos(angle) + x_center;
-	y = r * Math.sin(angle) + y_center;
-
-	ctx.lineTo(x, y);
-
-	angle += (1 / 3) * (2 * Math.PI)
-	x = r * Math.cos(angle) + x_center;
-	y = r * Math.sin(angle) + y_center;
-
-	ctx.lineTo(x, y);
-	ctx.closePath();
-	ctx.fill();
-}
-
-function drawTriangle(ctx, p_from, p_cell, p_to, color) {
-  ctx.beginPath();
-  ctx.fillStyle = color;
-  ctx.moveTo(p_from.x, p_from.y);
-  ctx.lineTo(p_cell.x, p_cell.y);
-  ctx.lineTo(p_to.x, p_to.y);
-  ctx.fill();
-  ctx.closePath();
-  ctx.strokeStyle = color;
-  ctx.strokeWidth = 1.5;
-  ctx.stroke();
-}
-
 
 function renderMap(canvas, settings = {}) {
   settings = Object.assign({}, {
@@ -110,7 +43,9 @@ function renderMap(canvas, settings = {}) {
     drawInnerEdges: true,
     drawCenterDot: true,
     drawHeightMarkers: false,
-    radius: 10
+    radius: 10,
+    cellInitialWater: 2,
+    riverThreshold: 100
   }, settings);
   const ctx = canvas.getContext('2d');
 
@@ -131,6 +66,10 @@ function renderMap(canvas, settings = {}) {
   // compute voronoi diagram
   console.time('voronoi computing');
   const diagram = voronoi.compute(dots, bbox);
+  diagram.edges = diagram.edges.map(edge => {
+    edge.id = guid();
+    return edge;
+  });
   console.timeEnd('voronoi computing');
 
   console.log(diagram);
@@ -210,23 +149,69 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
-  class Edge {
-    constructor(edge) {
+
+  let cells = []; // index matches voronoiId
+
+  class Side {
+    constructor(edge, sides) {
       this.edge = edge;
+      this.id = edge.id;
       this.water = 1;
+
+      this.from = new Point(edge.va.x, edge.va.y).round();
+      this.to = new Point(edge.vb.x, edge.vb.y).round();
+
+      this.left = cells[edge.lSite.voronoiId];
+      this.left.sides.add(this);
+      if (edge.rSite) {
+        this.right = cells[edge.rSite.voronoiId];
+        this.right.sides.add(this);
+      }
+
+      if (this.left && this.right) {
+        this.water = this.right.water + this.left.water / 2;
+        this.height = this.right.height + this.left.height / 2;
+      }
+
+      this.center = this.from.between(this.to);
+
+      this.connectedSides = new Set();
+      const searchRadius = 10; // settings.radius * 2;
+      sides.forEach(side => {
+        // if (side.from.isWithin(this.from, searchRadius) || side.to.isWithin(this.to, searchRadius) ||
+        //     side.from.isWithin(this.to, searchRadius) || side.to.isWithin(this.from, searchRadius)) {
+        //   this.connectedSides.add(side);
+        // }
+        if (side.center.isWithin(this.center, settings.radius * 1)) {
+          this.connectedSides.add(side);
+        }
+      });
+
+      if (this.left && this.right) {
+        const allowedEdges = Array.from(this.connectedSides);//.filter(s => s.height < this.height);
+        const found = _.orderBy(allowedEdges, 'height', 'ASC');
+        if (found.length > 0) {
+          this.down = found[0];
+        } else {
+          // console.log(this);
+          this.crest = true;
+        }
+      }
+    }
+
+    nextToSide(side) {
+      return this.from.isEqual(side.from) ||
+        this.to.isEqual(side.to) ||
+        this.from.isEqual(side.to) ||
+        this.to.isEqual(side.from)
+    }
+
+    toString() {
+      return `Side(from: ${this.from} to: ${this.to})`;
     }
   }
+  /*
   let edges = [];
-
-  class Corner {
-    constructor(point, index) {
-      this.point = point;
-      this.edgeIndex = index;
-      this.height = getHeightAtPoint(point);
-    }
-  }
-
-  let corners = [];
   let cornersByPoint = {};
   let cornerEdges = []; // 2D array of corner coordinates (x, y) to array of edges
   function addCornerEdge(corner, edge) {
@@ -250,37 +235,29 @@ function renderMap(canvas, settings = {}) {
     cornersByPoint[edge.va.x][edge.va.y] = cornerFrom;
   });
   diagram.edges.forEach((edge, index) => {
-    const cornerTo = cornersByPoint[edge.vb.x][edge.vb.y];
+    let cornerTo = cornersByPoint[edge.vb.x][edge.vb.y];
     if (!cornerTo) { // broken edge
-      return
+      cornerTo = new Corner(new Point(edge.vb.x, edge.vb.y), index);
+      corners.push(cornerTo);
     }
     edges[index].to = cornerTo;
     const cornerFrom = edges[index].from;
 
-    if (cornerFrom.height < cornerTo.height) {
-      edges[index].up = cornerTo;
-      edges[index].down = cornerFrom;
-    } else {
-      edges[index].up = cornerFrom;
-      edges[index].down = cornerTo;
-    }
     addCornerEdge(cornerTo, edges[index]);
     addCornerEdge(cornerFrom, edges[index]);
+
+    edges[index].connectedEdges = _(cornerEdges[cornerFrom.point.x][cornerFrom.point.y])
+      .concat(cornerEdges[cornerTo.point.x][cornerTo.point.y])
+      .remove(d => edges[index].id === d.id)
+      .value();
 
     edges[index].center = new Point(
       (edges[index].from.point.x + edges[index].to.point.x) / 2,
       (edges[index].from.point.y + edges[index].to.point.y) / 2
     );
   });
-  // clean up broken edges
-  edges = edges.filter(edge => Object.keys(edge).includes('down'));
+  */
 
-  edges = edges.map(edge => {
-    edge.downstream = cornerEdges[edge.down.point.x][edge.down.point.y];
-    return edge;
-  });
-
-  let cells = []; // index matches voronoiId
   class Cell {
     constructor(cell, voronoiId, center, height, type) {
       this.voronoiId = voronoiId;
@@ -290,8 +267,9 @@ function renderMap(canvas, settings = {}) {
       this.distanceFromCoast = 0;
       this.voronoiCell = cell;
       this.coastal = false;
-      this.water = type === 'land' ? 1 : 0;
-      this.flow = type === 'land' ? 1 : 0;
+      this.water = type === 'land' ? settings.cellInitialWater : 0;
+      this.flow = type === 'land' ? settings.cellInitialWater : 0;
+      this.sides = new Set();
       //neighbors
     }
   }
@@ -312,12 +290,11 @@ function renderMap(canvas, settings = {}) {
   });
 
   // associate Edges with Cells
-  edges = edges.map(edge => {
-    edge.left = cells[edge.edge.lSite.voronoiId];
-    if (edge.edge.rSite) {
-      edge.right = cells[edge.edge.rSite.voronoiId];
-    }
-    return edge;
+  let sides = [];
+
+  diagram.edges.forEach(edge => {
+    const side = new Side(edge, sides);
+    sides.push(side);
   });
 
   function computeDistanceFromCoast() {
@@ -351,7 +328,7 @@ function renderMap(canvas, settings = {}) {
 
   cells = cells.map(cell => {
     if (cell.type === 'land') {
-      cell.height = seaLevelHeight + (cell.distanceFromCoast * 5 + _.random(1.0, 2.9));
+      cell.height = seaLevelHeight + (cell.distanceFromCoast * 7 + _.random(1.0, 3.9));
     }
     return cell;
   });
@@ -372,12 +349,13 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
+  // make rivers
   let rivers = [];
   cells.forEach(cell => {
-    if (cell.water > 500 && cell.downstream) {
+    if (cell.water > settings.riverThreshold && cell.downstream) {
       let active = cell.downstream;
       let segments = [cell.downstream];
-      while(true) {
+      while (true) {
         if (active.type === 'land' && active.downstream) {
           segments.push(active.downstream);
           active = active.downstream;
@@ -388,10 +366,36 @@ function renderMap(canvas, settings = {}) {
       rivers.push(segments);
     }
   });
+
+
+  console.log('cells', cells);
+  console.log('sides', sides);
+
+
+  // make rivers
+  // edges
+  //   .filter(edge => edge.left && edge.right && edge.downstream)
+  //   .forEach(edge => {
+  //     if (edge.water > 500 && edge.downstream) {
+  //       let active = edge.downstream;
+  //       const segments = [edge.downstream];
+  //       while (true) {
+  //         // if one of the cells next to this edge is ocean, then exit
+  //         if (active.left.type === 'land' && active.right.type === 'land') {
+  //           if (!active.downstream) break;
+  //           segments.push(active.downstream);
+  //           active = active.downstream;
+  //         } else {
+  //           break;
+  //         }
+  //       }
+  //       rivers.push(segments);
+  //     }
+  //   });
   console.log('rivers', rivers);
 
 
-
+  // drawing
   if (settings.drawCells) {
     cells.forEach(cell => {
       const color = getColorForHeight(cell.height);
@@ -414,15 +418,12 @@ function renderMap(canvas, settings = {}) {
 
 
   if (settings.drawElevationArrows) {
-    ctx.fillStyle = 'black';
-    edges.forEach(edge => {
-      if (getHeightAtPoint(edge.center) >= seaLevelHeight) {
+    sides.forEach(side => {
+      if (getHeightAtPoint(side.center) >= seaLevelHeight) {
         drawArrow(
           ctx,
-          edge.up.point.x,
-          edge.up.point.y,
-          edge.center.x,
-          edge.center.y,
+          side.up.point,
+          side.center,
           3
         );
       }
@@ -459,8 +460,6 @@ function renderMap(canvas, settings = {}) {
       }
     });
   }
-  console.log(cornerEdges);
-  console.log(edges);
 
 
   // draw lines to neighbors
@@ -482,43 +481,38 @@ function renderMap(canvas, settings = {}) {
 
   // draw voronoi edges
   if (settings.drawEdges) {
-    diagram.edges.forEach(edge => {
-      const leftHeight = getHeightAtPoint(new Point(edge.lSite.x, edge.lSite.y));
-      const rightHeight = edge.rSite ? getHeightAtPoint(new Point(edge.rSite.x, edge.rSite.y)) : Infinity;
-      let color;
-
-      color = '#111';
+    sides.forEach(side => {
     	drawEdge(
       	ctx,
-      	new Point(edge.va.x, edge.va.y),
-        new Point(edge.vb.x, edge.vb.y),
+      	side.to,
+        side.from,
         1,
-        color
+        '#111'
       );
     });
   }
 
   // for each cell, draw a line to its corners
-  if (settings.drawInnerEdges) {
-    diagram.cells.forEach(cell => {
-    	cell.halfedges.forEach(halfEdge => {
-      	drawEdge(
-        	ctx,
-          new Point(cell.site.x, cell.site.y),
-          new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
-          0.5,
-          'red'
-        );
-        drawEdge(
-        	ctx,
-          new Point(cell.site.x, cell.site.y),
-          new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
-          0.5,
-          'red'
-        );
-      });
-    });
-  }
+  // if (settings.drawInnerEdges) {
+  //   diagram.cells.forEach(cell => {
+  //   	cell.halfedges.forEach(halfEdge => {
+  //     	drawEdge(
+  //       	ctx,
+  //         new Point(cell.site.x, cell.site.y),
+  //         new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
+  //         0.5,
+  //         'red'
+  //       );
+  //       drawEdge(
+  //       	ctx,
+  //         new Point(cell.site.x, cell.site.y),
+  //         new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
+  //         0.5,
+  //         'red'
+  //       );
+  //     });
+  //   });
+  // }
 
   if (settings.drawHeightMarkers) {
     cells.forEach(cell => {
@@ -595,10 +589,58 @@ function renderMap(canvas, settings = {}) {
       );
     });
   }
+
+  if (settings.drawSideSlopeArrows) {
+    sides.forEach(side => {
+      if (side.down) {
+        drawArrow(ctx, side.center, side.down.center, 5, 'rgba(255, 0, 0, 0.75)');
+        drawEdge(ctx, side.center, side.down.center, 2,  'rgba(255, 0, 0, 0.75)');
+      }
+    });
+  }
+
+
+  if (settings.drawEdgeHeight) {
+    sides.filter(c => c.crest).forEach(side => {
+      drawDot(ctx, side.center, 'purple', 3);
+    });
+    ctx.font = '7px Fira Code';
+    ctx.fillStyle = 'black';
+    ctx.textAlign = "center";
+    sides.forEach(side => {
+      ctx.fillText(
+        _.round(side.height, 1) || '',
+        side.center.x,
+        side.center.y + 10
+      );
+    })
+    ctx.fillStyle = 'white';
+    sides.forEach(side => {
+      ctx.fillText(
+        _.round(side.height, 1) || '',
+        side.center.x + 1,
+        side.center.y + 11
+      );
+    })
+  }
+
+  if (settings.drawEdgeWaterHeight) {
+    ctx.font = '7px Fira Code';
+    ctx.fillStyle = 'white';
+    ctx.textAlign = "center";
+    sides.forEach(side => {
+      ctx.fillText(
+        _.round(side.water, 1) || '',
+        side.center.x,
+        side.center.y + 5
+      );
+    })
+  }
+
 }
 
 
-class Map extends Component {
+class WorldMap extends Component {
   componentDidMount() {
     this.draw();
   }
@@ -611,7 +653,11 @@ class Map extends Component {
     renderMap(this.refs.board, {
       width: 1500,
       height: 700,
-      radius: 15,
+      radius: 20,
+
+      drawSideSlopeArrows: false,
+      drawEdgeHeight: false,
+
       drawRivers: true,
       drawCells: true,
       drawTriangles: false,
@@ -639,4 +685,4 @@ class Map extends Component {
   }
 }
 
-export default Map;
+export default WorldMap;
