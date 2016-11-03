@@ -57,6 +57,7 @@ function renderMap(canvas, settings = {}) {
   const dots = getDots(sampler);
 
   const voronoi = new Voronoi();
+  console.log(Voronoi.ε)
   const bbox = {
   	xl: 0,
     xr: settings.width,
@@ -65,6 +66,7 @@ function renderMap(canvas, settings = {}) {
   };
   // compute voronoi diagram
   console.time('voronoi computing');
+  voronoi.quantizeSites(dots);
   const diagram = voronoi.compute(dots, bbox);
   diagram.edges = diagram.edges.map(edge => {
     edge.id = guid();
@@ -158,8 +160,8 @@ function renderMap(canvas, settings = {}) {
       this.id = edge.id;
       this.water = 1;
 
-      this.from = new Point(edge.va.x, edge.va.y).round();
-      this.to = new Point(edge.vb.x, edge.vb.y).round();
+      this.from = new Point(edge.va.x, edge.va.y);
+      this.to = new Point(edge.vb.x, edge.vb.y);
 
       this.left = cells[edge.lSite.voronoiId];
       this.left.sides.add(this);
@@ -175,28 +177,23 @@ function renderMap(canvas, settings = {}) {
 
       this.center = this.from.between(this.to);
 
-      this.connectedSides = new Set();
-      const searchRadius = 10; // settings.radius * 2;
-      sides.forEach(side => {
-        // if (side.from.isWithin(this.from, searchRadius) || side.to.isWithin(this.to, searchRadius) ||
-        //     side.from.isWithin(this.to, searchRadius) || side.to.isWithin(this.from, searchRadius)) {
-        //   this.connectedSides.add(side);
-        // }
-        if (side.center.isWithin(this.center, settings.radius * 1)) {
-          this.connectedSides.add(side);
-        }
-      });
-
-      if (this.left && this.right) {
-        const allowedEdges = Array.from(this.connectedSides);//.filter(s => s.height < this.height);
-        const found = _.orderBy(allowedEdges, 'height', 'ASC');
-        if (found.length > 0) {
-          this.down = found[0];
-        } else {
-          // console.log(this);
-          this.crest = true;
-        }
-      }
+      // this.connectedSides = new Set();
+      // sides.forEach(side => {
+      //   if (side.nextToSide(this)) {
+      //     this.connectedSides.add(side);
+      //   }
+      // });
+      //
+      // if (this.left && this.right) {
+      //   const allowedEdges = Array.from(this.connectedSides);//.filter(s => s.height < this.height);
+      //   const found = _.orderBy(allowedEdges, 'height', 'ASC');
+      //   if (found.length > 0) {
+      //     this.down = found[0];
+      //   } else {
+      //     // console.log(this);
+      //     this.crest = true;
+      //   }
+      // }
     }
 
     nextToSide(side) {
@@ -592,10 +589,17 @@ function renderMap(canvas, settings = {}) {
 
   if (settings.drawSideSlopeArrows) {
     sides.forEach(side => {
+      // draw an arrow from each edge center to its downstream edge center
       if (side.down) {
         drawArrow(ctx, side.center, side.down.center, 5, 'rgba(255, 0, 0, 0.75)');
         drawEdge(ctx, side.center, side.down.center, 2,  'rgba(255, 0, 0, 0.75)');
       }
+      // draw a line between each edge center and its connected edges centers
+      // if (side.connectedSides) {
+      //   side.connectedSides.forEach(s => {
+      //     drawEdge(ctx, side.center, s.center, 2, 'blue');
+      //   });
+      // }
     });
   }
 
