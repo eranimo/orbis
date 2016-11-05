@@ -44,8 +44,8 @@ function renderMap(canvas, settings = {}) {
     drawCenterDot: true,
     drawHeightMarkers: false,
     radius: 10,
-    cellInitialWater: 2,
-    riverThreshold: 100
+    cellInitialWater: 5,
+    riverThreshold: 50
   }, settings);
   const ctx = canvas.getContext('2d');
 
@@ -176,24 +176,6 @@ function renderMap(canvas, settings = {}) {
       }
 
       this.center = this.from.between(this.to);
-
-      // this.connectedSides = new Set();
-      // sides.forEach(side => {
-      //   if (side.nextToSide(this)) {
-      //     this.connectedSides.add(side);
-      //   }
-      // });
-      //
-      // if (this.left && this.right) {
-      //   const allowedEdges = Array.from(this.connectedSides);//.filter(s => s.height < this.height);
-      //   const found = _.orderBy(allowedEdges, 'height', 'ASC');
-      //   if (found.length > 0) {
-      //     this.down = found[0];
-      //   } else {
-      //     // console.log(this);
-      //     this.crest = true;
-      //   }
-      // }
     }
 
     nextToSide(side) {
@@ -207,53 +189,6 @@ function renderMap(canvas, settings = {}) {
       return `Side(from: ${this.from} to: ${this.to})`;
     }
   }
-  /*
-  let edges = [];
-  let cornersByPoint = {};
-  let cornerEdges = []; // 2D array of corner coordinates (x, y) to array of edges
-  function addCornerEdge(corner, edge) {
-    if (!cornerEdges[corner.point.x]) {
-      cornerEdges[corner.point.x] = [];
-    }
-    if (!cornerEdges[corner.point.x][corner.point.y]) {
-      cornerEdges[corner.point.x][corner.point.y] = [];
-    }
-    cornerEdges[corner.point.x][corner.point.y].push(edge);
-  }
-  diagram.edges.forEach((edge, index) => {
-    edges[index] = new Edge(edge);
-    // drawDot(ctx, new Point(edge.va.x, edge.va.y), 'yellow');
-    const cornerFrom = new Corner(new Point(edge.va.x, edge.va.y), index);
-    corners.push(cornerFrom);
-    edges[index].from = cornerFrom;
-    if (!cornersByPoint[edge.va.x]) {
-      cornersByPoint[edge.va.x] = {};
-    }
-    cornersByPoint[edge.va.x][edge.va.y] = cornerFrom;
-  });
-  diagram.edges.forEach((edge, index) => {
-    let cornerTo = cornersByPoint[edge.vb.x][edge.vb.y];
-    if (!cornerTo) { // broken edge
-      cornerTo = new Corner(new Point(edge.vb.x, edge.vb.y), index);
-      corners.push(cornerTo);
-    }
-    edges[index].to = cornerTo;
-    const cornerFrom = edges[index].from;
-
-    addCornerEdge(cornerTo, edges[index]);
-    addCornerEdge(cornerFrom, edges[index]);
-
-    edges[index].connectedEdges = _(cornerEdges[cornerFrom.point.x][cornerFrom.point.y])
-      .concat(cornerEdges[cornerTo.point.x][cornerTo.point.y])
-      .remove(d => edges[index].id === d.id)
-      .value();
-
-    edges[index].center = new Point(
-      (edges[index].from.point.x + edges[index].to.point.x) / 2,
-      (edges[index].from.point.y + edges[index].to.point.y) / 2
-    );
-  });
-  */
 
   class Cell {
     constructor(cell, voronoiId, center, height, type) {
@@ -268,6 +203,22 @@ function renderMap(canvas, settings = {}) {
       this.flow = type === 'land' ? settings.cellInitialWater : 0;
       this.sides = new Set();
       //neighbors
+    }
+
+    equalTo(cell) {
+      return this.voronoiId === cell.voronoiId;
+    }
+
+    // returns the side between this cell and another, null if no side shared with given cell
+    sideWith(cell) {
+      for (const side of this.sides) {
+        if (side.left && side.right &&
+            side.left.equalTo(this) && side.right.equalTo(cell) ||
+            side.right.equalTo(this) && side.left.equalTo(cell)) {
+          return side;
+        }
+      }
+      return null;
     }
   }
   // make Cell instances
@@ -337,36 +288,94 @@ function renderMap(canvas, settings = {}) {
       if (found.type === 'land') {
         found.water += cell.water;
         found.flow += cell.flow;
-        cell.downstream = found;
-        cell.flow = 0;
-      } else { // drain in the ocean
-        cell.downstream = found;
-        cell.flow = 0;
       }
+      cell.downstream = found;
+      cell.flow = 0;
     });
   }
 
   // make rivers
+  // let rivers = [];
+  // cells.forEach(cell => {
+  //   if (cell.water > settings.riverThreshold && cell.downstream) {
+  //     let active = cell.downstream;
+  //     let segments = [cell.downstream];
+  //     while (true) {
+  //       active.isRiver = true;
+  //       if (active.type === 'land') {
+  //         if (active.downstream.isRiver) {
+  //           segments.push(active.downstream);
+  //           // drawDot(ctx, active.downstream.center, 'yellow', 10);
+  //           break;
+  //           // active = active.downstream;
+  //         } else {
+  //           segments.push(active.downstream);
+  //           active = active.downstream;
+  //         }
+  //       } else {
+  //         break;
+  //       }
+  //     }
+  //     rivers.push(segments);
+  //   }
+  // });
+
   let rivers = [];
-  cells.forEach(cell => {
-    if (cell.water > settings.riverThreshold && cell.downstream) {
-      let active = cell.downstream;
-      let segments = [cell.downstream];
-      while (true) {
-        if (active.type === 'land' && active.downstream) {
-          segments.push(active.downstream);
-          active = active.downstream;
-        } else {
-          break;
-        }
+
+  class RiverSegment {
+    constructor(cell) {
+      this.cell = cell;
+      if (this.riverSegment) {
+        throw new Error(`${cell} already has a river segment`);
+      } else {
+        cell.isRiver = true;
+        cell.riverSegment = this;
       }
-      rivers.push(segments);
+      this.upstream = new Set();
+      this.sortedUpstream = [];
+    }
+
+    addUpstream(segment) {
+      this.upstream.add(segment);
+      this.sortedUpstream = _.orderBy(Array.from(this.upstream), seg => seg.cell.water).reverse();
+    }
+
+    get trunk() {
+      return _.head(this.sortedUpstream);
+    }
+
+    get branches() {
+      return _.tail(this.sortedUpstream);
+    }
+  }
+
+  function riverStep(cell, isRoot = false) {
+    const segment = new RiverSegment(cell);
+    const neighbors = cell.neighbors
+      .filter(c => c.height > cell.height &&
+                   c.type === 'land' &&
+                   c.water > settings.riverThreshold &&
+                   c.water < cell.water);
+    if (!isRoot && cell.coastal) return segment;
+    _.uniq(neighbors).forEach(n => {
+      if (!n.isRiver) {
+        const nsegment = riverStep(n);
+        segment.addUpstream(nsegment);
+      }
+    });
+    return segment;
+  }
+
+  cells.forEach(cell => {
+    if (cell.coastal && cell.water > settings.riverThreshold && !cell.isRiver) {
+      const seg = riverStep(cell, true);
+      rivers.push(seg);
     }
   });
 
-
   console.log('cells', cells);
   console.log('sides', sides);
+  console.log('rivers', rivers);
 
 
   // make rivers
@@ -389,7 +398,6 @@ function renderMap(canvas, settings = {}) {
   //       rivers.push(segments);
   //     }
   //   });
-  console.log('rivers', rivers);
 
 
   // drawing
@@ -540,32 +548,75 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
+  const drawnSegments = new Set();
+
+  const avgWater = _.meanBy(cells, 'water');
+  function decideRiverWidth(cell) {
+    if (cell.water > avgWater) return 2;
+    return 1;
+  }
+
   if (settings.drawRivers) {
-    rivers.forEach(segments => {
-      if (segments.length < 3) return;
-      const {center, water} = segments[0];
+    rivers.forEach(segment => {
+      const nearestOcean = _.sortBy(segment.cell.neighbors.filter(c => c.type === 'ocean'), c => c.center.distanceTo(segment.cell.center), 'ASC')[0];
+      const mouth = nearestOcean.sideWith(segment.cell);
       ctx.beginPath();
-      ctx.strokeStyle = 'blue';
-      ctx.moveTo(center.x, center.y);
-      const points = [];
-      for (let i = 1; i < segments.length - 1; i++) {
-        const seg = segments[i];
-        // ctx.lineTo(seg.center.x, seg.center.y);
-        points.push(seg.center.x, seg.center.y);
-      }
-      const riverDelta = _.nth(segments, -2);
-      const end = _.last(segments);
-      // ctx.lineTo(
-      //   (riverDelta.center.x + end.center.x) / 2,
-      //   (riverDelta.center.y + end.center.y) / 2
-      // );
-      points.push(
-        (riverDelta.center.x + end.center.x) / 2,
-        (riverDelta.center.y + end.center.y) / 2
-      );
-      curve(ctx, points);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0, 0, 255, 1)';
+      ctx.lineWidth = segment.upstream.length === 0 ? 1 : 2;
+      ctx.moveTo(mouth.center.x, mouth.center.y);
+      ctx.lineTo(segment.cell.center.x, segment.cell.center.y);
       ctx.stroke();
       ctx.closePath();
+
+      function drawSegment(lastSeg, seg) {
+        ctx.beginPath();
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 255, 1)';
+        ctx.moveTo(lastSeg.cell.center.x, lastSeg.cell.center.y);
+        const between = lastSeg.cell.sideWith(seg.cell);
+        ctx.strokeWidth = decideRiverWidth(seg.cell);
+        // ctx.lineTo(between.center.x, between.center.y);
+        // ctx.lineTo(seg.cell.center.x, seg.cell.center.y);
+        curve(ctx, [
+          lastSeg.cell.center.x, lastSeg.cell.center.y,
+          between.center.x, between.center.y,
+          seg.cell.center.x, seg.cell.center.y
+        ], 0.2, 100);
+        ctx.stroke();
+        ctx.closePath();
+        seg.upstream.forEach(s => drawSegment(seg, s));
+      }
+      segment.upstream.forEach(seg => {
+        drawSegment(segment, seg);
+      });
+      // const {center, water} = segments[0];
+      // drawDot(ctx, center, 'green', 5);
+      // ctx.beginPath();
+      // ctx.strokeStyle = 'blue';
+      // ctx.moveTo(center.x, center.y);
+      // const points = [];
+      // for (let i = 1; i < segments.length - 1; i++) {
+      //   const seg = segments[i];
+      //   // ctx.lineTo(seg.center.x, seg.center.y);
+      //   points.push(seg.center.x, seg.center.y);
+      // }
+      // const secondToLast = _.nth(segments, -2);
+      // const end = _.last(segments);
+      //
+      // if (end.type === 'ocean') {
+      //   points.push(
+      //     (secondToLast.center.x + end.center.x) / 2,
+      //     (secondToLast.center.y + end.center.y) / 2
+      //   );
+      // } else {
+      //   points.push(end.center.x, end.center.y);
+      // }
+      // curve(ctx, points);
+      // ctx.stroke();
+      // ctx.closePath();
+      //
+      // drawDot(ctx, end.center, 'red', 3);
     });
   }
 
