@@ -57,7 +57,6 @@ function renderMap(canvas, settings = {}) {
   const dots = getDots(sampler);
 
   const voronoi = new Voronoi();
-  console.log(Voronoi.ε)
   const bbox = {
   	xl: 0,
     xr: settings.width,
@@ -83,7 +82,6 @@ function renderMap(canvas, settings = {}) {
     size: HEIGHTMAP_SIZE
   });
   smallerHeightmap.generate();
-  console.log(smallerHeightmap);
   // console.profileEnd('diamond square');
   console.timeEnd('diamond square');
 
@@ -253,7 +251,6 @@ function renderMap(canvas, settings = {}) {
       visited[c.voronoiId] = true;
     })
     let activeCellsSet = new Set(_.flatten(Array.from(coastal).map(c => c.neighbors).filter(c => !visited[c.voronoiId])));
-    console.log(activeCellsSet);
     let distance = 0;
     while(activeCellsSet.size > 0) {
       distance += 1;
@@ -293,32 +290,6 @@ function renderMap(canvas, settings = {}) {
       cell.flow = 0;
     });
   }
-
-  // make rivers
-  // let rivers = [];
-  // cells.forEach(cell => {
-  //   if (cell.water > settings.riverThreshold && cell.downstream) {
-  //     let active = cell.downstream;
-  //     let segments = [cell.downstream];
-  //     while (true) {
-  //       active.isRiver = true;
-  //       if (active.type === 'land') {
-  //         if (active.downstream.isRiver) {
-  //           segments.push(active.downstream);
-  //           // drawDot(ctx, active.downstream.center, 'yellow', 10);
-  //           break;
-  //           // active = active.downstream;
-  //         } else {
-  //           segments.push(active.downstream);
-  //           active = active.downstream;
-  //         }
-  //       } else {
-  //         break;
-  //       }
-  //     }
-  //     rivers.push(segments);
-  //   }
-  // });
 
   let rivers = [];
 
@@ -376,29 +347,6 @@ function renderMap(canvas, settings = {}) {
   console.log('cells', cells);
   console.log('sides', sides);
   console.log('rivers', rivers);
-
-
-  // make rivers
-  // edges
-  //   .filter(edge => edge.left && edge.right && edge.downstream)
-  //   .forEach(edge => {
-  //     if (edge.water > 500 && edge.downstream) {
-  //       let active = edge.downstream;
-  //       const segments = [edge.downstream];
-  //       while (true) {
-  //         // if one of the cells next to this edge is ocean, then exit
-  //         if (active.left.type === 'land' && active.right.type === 'land') {
-  //           if (!active.downstream) break;
-  //           segments.push(active.downstream);
-  //           active = active.downstream;
-  //         } else {
-  //           break;
-  //         }
-  //       }
-  //       rivers.push(segments);
-  //     }
-  //   });
-
 
   // drawing
   if (settings.drawCells) {
@@ -497,28 +445,6 @@ function renderMap(canvas, settings = {}) {
     });
   }
 
-  // for each cell, draw a line to its corners
-  // if (settings.drawInnerEdges) {
-  //   diagram.cells.forEach(cell => {
-  //   	cell.halfedges.forEach(halfEdge => {
-  //     	drawEdge(
-  //       	ctx,
-  //         new Point(cell.site.x, cell.site.y),
-  //         new Point(halfEdge.edge.va.x, halfEdge.edge.va.y),
-  //         0.5,
-  //         'red'
-  //       );
-  //       drawEdge(
-  //       	ctx,
-  //         new Point(cell.site.x, cell.site.y),
-  //         new Point(halfEdge.edge.vb.x, halfEdge.edge.vb.y),
-  //         0.5,
-  //         'red'
-  //       );
-  //     });
-  //   });
-  // }
-
   if (settings.drawHeightMarkers) {
     cells.forEach(cell => {
       if (cell.height >= seaLevelHeight) {
@@ -590,33 +516,6 @@ function renderMap(canvas, settings = {}) {
       segment.upstream.forEach(seg => {
         drawSegment(segment, seg);
       });
-      // const {center, water} = segments[0];
-      // drawDot(ctx, center, 'green', 5);
-      // ctx.beginPath();
-      // ctx.strokeStyle = 'blue';
-      // ctx.moveTo(center.x, center.y);
-      // const points = [];
-      // for (let i = 1; i < segments.length - 1; i++) {
-      //   const seg = segments[i];
-      //   // ctx.lineTo(seg.center.x, seg.center.y);
-      //   points.push(seg.center.x, seg.center.y);
-      // }
-      // const secondToLast = _.nth(segments, -2);
-      // const end = _.last(segments);
-      //
-      // if (end.type === 'ocean') {
-      //   points.push(
-      //     (secondToLast.center.x + end.center.x) / 2,
-      //     (secondToLast.center.y + end.center.y) / 2
-      //   );
-      // } else {
-      //   points.push(end.center.x, end.center.y);
-      // }
-      // curve(ctx, points);
-      // ctx.stroke();
-      // ctx.closePath();
-      //
-      // drawDot(ctx, end.center, 'red', 3);
     });
   }
 
