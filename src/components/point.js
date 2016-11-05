@@ -22,6 +22,13 @@ export default class Point {
     return Math.sqrt(Math.pow(point.x - this.x, 2) + Math.pow(point.y - this.y, 2));
   }
 
+  randomWithin(distance) {
+    return new Point(
+      this.x + _.random(distance),
+      this.y + _.random(distance)
+    )
+  }
+
   between(point) {
     return new Point(
       (this.x + point.x) / 2,

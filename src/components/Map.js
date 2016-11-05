@@ -502,8 +502,6 @@ function renderMap(canvas, settings = {}) {
         ctx.moveTo(lastSeg.cell.center.x, lastSeg.cell.center.y);
         const between = lastSeg.cell.sideWith(seg.cell);
         ctx.strokeWidth = decideRiverWidth(seg.cell);
-        // ctx.lineTo(between.center.x, between.center.y);
-        // ctx.lineTo(seg.cell.center.x, seg.cell.center.y);
         curve(ctx, [
           lastSeg.cell.center.x, lastSeg.cell.center.y,
           between.center.x, between.center.y,
@@ -544,12 +542,6 @@ function renderMap(canvas, settings = {}) {
         drawArrow(ctx, side.center, side.down.center, 5, 'rgba(255, 0, 0, 0.75)');
         drawEdge(ctx, side.center, side.down.center, 2,  'rgba(255, 0, 0, 0.75)');
       }
-      // draw a line between each edge center and its connected edges centers
-      // if (side.connectedSides) {
-      //   side.connectedSides.forEach(s => {
-      //     drawEdge(ctx, side.center, s.center, 2, 'blue');
-      //   });
-      // }
     });
   }
 
