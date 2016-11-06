@@ -13,6 +13,7 @@
   "dependencies": {
     "cardinal-spline-js": "^2.3.6",
     "datastructures-js": "^3.0.5",
+    "flexboxgrid": "^6.3.1",
     "lodash": "^4.16.4",
     "mobx": "^2.6.1",
     "mobx-react": "^3.5.8",

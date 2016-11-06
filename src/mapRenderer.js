@@ -164,7 +164,7 @@ export default function renderMap(canvas, map, settings = {}) {
       ctx.beginPath();
       ctx.lineCap = 'round';
       ctx.strokeStyle = 'rgba(0, 0, 255, 1)';
-      ctx.lineWidth = segment.upstream.length === 0 ? 1 : 2;
+      ctx.lineWidth = segment.trunk ? 2 : 1;
       ctx.moveTo(mouth.center.x, mouth.center.y);
       ctx.lineTo(segment.cell.center.x, segment.cell.center.y);
       ctx.stroke();
@@ -173,6 +173,7 @@ export default function renderMap(canvas, map, settings = {}) {
       function drawSegment(lastSeg, seg) {
         ctx.beginPath();
         ctx.lineCap = 'round';
+        ctx.lineWidth = seg.trunk ? 2 : 0.4;
         ctx.strokeStyle = 'rgba(0, 0, 255, 1)';
         ctx.moveTo(lastSeg.cell.center.x, lastSeg.cell.center.y);
         const between = lastSeg.cell.sideWith(seg.cell);

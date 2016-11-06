@@ -4,24 +4,25 @@ import renderMap from '../mapRenderer';
 import generateMap from '../mapGenerator';
 import { observable, observe } from 'mobx';
 import { observer, Provider } from 'mobx-react';
+import _ from 'lodash';
 
-class LocalStorageSync {
-  constructor() {
-    const key = 'MapUIState';
-    if (window.localStorage[key]) {
-      this.settings = JSON.parse(window.localStorage[key]);
-    } else {
-      window.localStorage[key] = JSON.stringify(this.settings);
-    }
-    observe(this.settings, change => {
-      const newSettings = JSON.parse(window.localStorage[key]);
-      newSettings[change.name] = change.newValue;
-      window.localStorage[key] = JSON.stringify(newSettings);
-    });
+
+
+function localStorageSync(storageKey, property) {
+  if (window.localStorage[storageKey]) {
+    property = JSON.parse(window.localStorage[storageKey]);
+  } else {
+    window.localStorage[storageKey] = JSON.stringify(property);
   }
+  observe(property, change => {
+    const newSettings = JSON.parse(window.localStorage[storageKey]);
+    newSettings[change.name] = change.newValue;
+    window.localStorage[storageKey] = JSON.stringify(newSettings);
+  });
 }
 
-class MapUIState extends LocalStorageSync {
+
+class MapUIState {
   @observable settings = {
     drawEdges: true,
     drawRivers: true,
@@ -31,8 +32,24 @@ class MapUIState extends LocalStorageSync {
 }
 
 
+class Map {
+  @observable settings = {
+    radius: 20,
+    width: 1500,
+    height: 700,
+    riverThreshold: 50
+  }
+
+  @observable data = null;
+
+  generate() {
+    this.data = generateMap(this.settings);
+  }
+}
+
+
 @observer
-class WorldMap extends Component {
+class MapViewer extends Component {
   componentDidMount() {
     this.init();
   }
@@ -40,24 +57,17 @@ class WorldMap extends Component {
     this.draw();
   }
   init() {
-    this.generate();
+    this.props.map.generate();
     this.draw();
   }
-  generate() {
-    this.map = generateMap({
-      radius: 20,
-      width: 1500,
-      height: 700,
-    });
-  }
-  componentDidUpdate() {
-    this.draw();
-  }
+  // componentDidUpdate(nextProps) {
+  //   this.draw();
+  // }
   draw() {
     const { settings } = this.props.mapUIState;
     console.group('Map draw');
     console.time('total draw');
-    renderMap(this.refs.board, this.map, {
+    renderMap(this.refs.board, this.props.map.data, {
       width: 1500,
       height: 700,
 
@@ -75,23 +85,64 @@ class WorldMap extends Component {
     console.timeEnd('total draw');
     console.groupEnd();
   }
-  handleToggle(key) {
+  toggleUIState(key) {
     return () => {
       this.props.mapUIState.settings[key] = !this.props.mapUIState.settings[key];
     }
   }
+  setMapOption(key) {
+    return (event) => {
+      this.props.map.settings[key] = event.target.value;
+    }
+  }
+  updateValue(ref, key) {
+    this.props.mapUIState.settings[key] = this.refs[ref].value;
+    this.init();
+  }
   render() {
-    const { settings } = this.props.mapUIState;
-    console.log(settings);
+    const { mapUIState, map } = this.props;
     return (
       <div>
-        <div>
-          <h2>Controls</h2>
-          <div>
-            Draw sides <input type="checkbox" checked={settings.drawEdges} onChange={this.handleToggle.call(this, 'drawEdges')} />
-            Draw rivers <input type="checkbox" checked={settings.drawRivers} onChange={this.handleToggle.call(this, 'drawRivers')} />
-            Draw height markers <input type="checkbox" checked={settings.drawHeightMarkers} onChange={this.handleToggle.call(this, 'drawHeightMarkers')} />
-            Draw water amount <input type="checkbox" checked={settings.drawCellWaterAmount} onChange={this.handleToggle.call(this, 'drawCellWaterAmount')} />
+        <div className="row">
+          <div className="col-md-6">
+            <h2>Map Controls</h2>
+            Draw sides
+            <input
+              type="checkbox"
+              checked={mapUIState.settings.drawEdges}
+              onChange={this.toggleUIState.call(this, 'drawEdges')}
+            />
+
+            Draw rivers
+            <input
+              type="checkbox"
+              checked={mapUIState.settings.drawRivers}
+              onChange={this.toggleUIState.call(this, 'drawRivers')}
+            />
+            <br />
+            Draw height markers:
+            <input
+              type="checkbox"
+              checked={mapUIState.settings.drawHeightMarkers}
+              onChange={this.toggleUIState.call(this, 'drawHeightMarkers')}
+            />
+
+            Draw water amount
+            <input
+              type="checkbox"
+              checked={mapUIState.settings.drawCellWaterAmount}
+              onChange={this.toggleUIState.call(this, 'drawCellWaterAmount')}
+            />
+
+          </div>
+          <div className="col-md-6">
+            <h2>Generator Options</h2>
+            River threshold
+            <input
+              type="text"
+              value={map.settings.riverThreshold}
+              onChange={this.setMapOption.call(this, 'riverThreshold')}
+            />
           </div>
           <button onClick={this.init.bind(this)}>Regenerate</button>
           <button onClick={this.redraw.bind(this)}>Redraw</button>
@@ -102,7 +153,8 @@ class WorldMap extends Component {
   }
 }
 
-export default () => {
-  const state = new MapUIState();
-  return <WorldMap mapUIState={state} />
-}
+export default observer(function () {
+  const mapUIState = new MapUIState();
+  const map = new Map();
+  return <MapViewer mapUIState={mapUIState} map={map} />
+})
