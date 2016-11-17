@@ -273,5 +273,28 @@ export default function generateMap(settings) {
     }
   });
 
+
+  // calculate cell distance from river
+  // TODO: use # of cells between instead of pixel distance
+  cells.forEach(cell => {
+    if (cell.type === 'ocean') return;
+    if (cell.isRiver) {
+      cell.distanceFromRiver = 0;
+      return;
+    }
+
+    let min = Infinity;
+    cells.forEach(c => {
+      if (c == cell) return;
+      if (!c.isRiver) return;
+      const dist = cell.center.distanceTo(c.center);
+      if (dist < min) {
+        min = dist;
+      }
+    });
+    cell.distanceFromRiver = min / settings.radius;
+
+  });
+
   return { seaLevelHeight, cells, sides, rivers, diagram };
 }

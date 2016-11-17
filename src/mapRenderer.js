@@ -27,7 +27,8 @@ export default function renderMap(canvas, map, settings = {}) {
     drawNeighborNetwork: true,
     drawCenterDot: true,
     drawHeightMarkers: false,
-    drawCellWaterAmount: false
+    drawCellWaterAmount: false,
+    drawRiverDistance: false
   }, settings);
   const ctx = canvas.getContext('2d');
 
@@ -248,6 +249,19 @@ export default function renderMap(canvas, map, settings = {}) {
     map.diagram.cells.forEach(cell => {
   		drawDot(ctx, new Point(cell.site.x, cell.site.y), 'red');
     });
+  }
+
+  if (settings.drawRiverDistance) {
+    map.cells.filter(c => c.type === 'land').forEach(cell => {
+      ctx.fillStyle = 'white';
+      ctx.font = '7px Fira Code';
+      ctx.textAlign = "center";
+      ctx.fillText(
+        _.round(cell.distanceFromRiver, 1),
+        cell.center.x,
+        cell.center.y
+      );
+    })
   }
 
 }

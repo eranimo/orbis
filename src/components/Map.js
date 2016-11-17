@@ -27,7 +27,8 @@ class MapUIState {
     drawEdges: true,
     drawRivers: true,
     drawHeightMarkers: false,
-    drawCellWaterAmount: false
+    drawCellWaterAmount: false,
+    drawRiverDistance: false
   }
 }
 
@@ -78,6 +79,7 @@ class MapViewer extends Component {
       drawEdges: settings.drawEdges,
       drawCellWaterAmount: settings.drawCellWaterAmount,
       drawHeightMarkers: settings.drawHeightMarkers,
+      drawRiverDistance: settings.drawRiverDistance,
       drawElevationArrows: false,
       drawNeighborNetwork: false,
       drawCenterDot: false
@@ -126,6 +128,14 @@ class MapViewer extends Component {
               checked={mapUIState.settings.drawHeightMarkers}
               onChange={this.toggleUIState.call(this, 'drawHeightMarkers')}
             />
+            <br />
+            Draw river distance:
+            <input
+              type="checkbox"
+              checked={mapUIState.settings.drawRiverDistance}
+              onChange={this.toggleUIState.call(this, 'drawRiverDistance')}
+            />
+
 
             Draw water amount
             <input
