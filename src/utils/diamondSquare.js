@@ -6,22 +6,12 @@ import nextafter from 'nextafter';
 
 export default class DiamondSquare {
 
-  constructor(options) {
+  constructor(options, random) {
     // prepare the grid
     this.finalSize = options.size || 512;
     this.size = this.finalSize / 2 || 256;
     this.roughness = options.roughness || 2;
-    this.engine = Random.engines.mt19937();
-    if (options.seed) {
-      this.seed = options.seed;
-      this.engine.seed(this.seed);
-    } else {
-      this.engine.autoSeed();
-    }
-  }
-
-  randomInt(max) {
-    return Random.integer(0, max)(this.engine);
+    this.random = random;
   }
 
   get(x, y) {
@@ -33,8 +23,8 @@ export default class DiamondSquare {
   }
 
   generate() {
-    const top = this.randomInt(255);
-    const bottom = this.randomInt(255);
+    const top = this.random.randomInt(255);
+    const bottom = this.random.randomInt(255);
 
     this.grid = nj.zeros([this.size, this.size], 'float32');
     this.grid.set(0, 0, top);
@@ -145,7 +135,7 @@ export default class DiamondSquare {
     if (this.grid.get(x, y) === 0) {
       const d = Math.abs(xa - xb) + Math.abs(ya - yb);
       let cell = (this.grid.get(xa, ya) + this.grid.get(xb, yb)) / 2;
-      cell += Random.real(-0.5, 0.5)(this.engine) * d * this.roughness;
+      cell += this.random.real(-0.5, 0.5) * d * this.roughness;
       if (y === 0) {
         this.grid.set(x, this.size - 1, cell);
       }

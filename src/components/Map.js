@@ -1,5 +1,5 @@
 /* @flow */
-import React, { Component } from 'react';
+import React, { Component, PropTypes } from 'react';
 import renderMap from '../mapRenderer';
 import generateMap from '../mapGenerator';
 import { observable, observe } from 'mobx';
@@ -24,7 +24,7 @@ function localStorageSync(storageKey, property) {
 
 class MapUIState {
   @observable settings = {
-    drawEdges: true,
+    drawEdges: false,
     drawRivers: true,
     drawHeightMarkers: false,
     drawCellWaterAmount: false,
@@ -35,16 +35,54 @@ class MapUIState {
 
 class Map {
   @observable settings = {
-    radius: 20,
+    radius: 15,
     width: 1500,
     height: 700,
-    riverThreshold: 50
+    riverThreshold: 250,
+    seed: undefined
   }
 
   @observable data = null;
 
   generate() {
     this.data = generateMap(this.settings);
+    console.log(this.data);
+  }
+}
+
+
+@observer
+class HeightmapViewer extends Component {
+  static propTypes = {
+    heightmap: PropTypes.object
+  }
+  componentDidMount() {
+    this.draw();
+  }
+  componentDidUpdate(){
+    this.draw();
+  }
+  draw() {
+    const heightmap = this.props.heightmap;
+    if (heightmap) {
+      const canvas = this.refs.map;
+      canvas.width = heightmap.size;
+      canvas.height = heightmap.size;
+      const ctx = canvas.getContext('2d');
+      console.log(heightmap);
+      for (let x = 0; x < heightmap.size; x++) {
+        for (let y = 0; y < heightmap.size; y++) {
+          const height = parseInt(heightmap.get(x, y), 10);
+          ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  }
+  render() {
+    return (
+      <canvas ref="map" />
+    )
   }
 }
 
@@ -143,7 +181,6 @@ class MapViewer extends Component {
               checked={mapUIState.settings.drawCellWaterAmount}
               onChange={this.toggleUIState.call(this, 'drawCellWaterAmount')}
             />
-
           </div>
           <div className="col-md-6">
             <h2>Generator Options</h2>
@@ -153,9 +190,23 @@ class MapViewer extends Component {
               value={map.settings.riverThreshold}
               onChange={this.setMapOption.call(this, 'riverThreshold')}
             />
+
+            Seed
+            <input
+              type="text"
+              value={map.settings.seed}
+              placeholder="Empty for random seed"
+              onChange={this.setMapOption.call(this, 'seed')}
+            />
+
+            <div>
+              <HeightmapViewer heightmap={this.props.map.data ? this.props.map.data.heightmap : {}} />
+            </div>
           </div>
-          <button onClick={this.init.bind(this)}>Regenerate</button>
-          <button onClick={this.redraw.bind(this)}>Redraw</button>
+          <div>
+            <button onClick={this.init.bind(this)}>Regenerate</button>
+            <button onClick={this.redraw.bind(this)}>Redraw</button>
+          </div>
         </div>
         <canvas ref="board"></canvas>
       </div>

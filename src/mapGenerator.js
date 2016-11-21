@@ -1,7 +1,8 @@
 import poissonDiscSampler from './utils/poissonDisk';
 import Voronoi from 'voronoi';
 import Point from './point';
-import DiamondSquare from './utils/diamondSquare.js';
+import DiamondSquare from './utils/diamondSquare';
+import Random from './utils/random';
 
 
 function getDots(sampler) {
@@ -16,9 +17,9 @@ function getDots(sampler) {
   }
 }
 
-function guid() {
+function guid(random) {
   function s4() {
-    return Math.floor((1 + Math.random()) * 0x10000)
+    return Math.floor((1 + random.random()) * 0x10000)
       .toString(16)
       .substring(1);
   }
@@ -34,8 +35,11 @@ export default function generateMap(settings) {
     width: 900,
     height: 700,
   }, settings);
+
+  const random = new Random(settings.seed);
+
   // get Poisson-Disc dots
-  const sampler = poissonDiscSampler(settings.width, settings.height, settings.radius);
+  const sampler = poissonDiscSampler(settings.width, settings.height, settings.radius, random);
   const dots = getDots(sampler);
 
   const voronoi = new Voronoi();
@@ -50,7 +54,7 @@ export default function generateMap(settings) {
   voronoi.quantizeSites(dots);
   const diagram = voronoi.compute(dots, bbox);
   diagram.edges = diagram.edges.map(edge => {
-    edge.id = guid();
+    edge.id = guid(random);
     return edge;
   });
   console.timeEnd('voronoi computing');
@@ -62,7 +66,7 @@ export default function generateMap(settings) {
   const HEIGHTMAP_SIZE = 256;
   const smallerHeightmap = new DiamondSquare({
     size: HEIGHTMAP_SIZE
-  });
+  }, random);
   smallerHeightmap.generate();
   // console.profileEnd('diamond square');
   console.timeEnd('diamond square');
@@ -202,7 +206,7 @@ export default function generateMap(settings) {
 
   cells = cells.map(cell => {
     if (cell.type === 'land') {
-      cell.height = seaLevelHeight + (cell.distanceFromCoast * 7 + _.random(1.0, 3.9));
+      cell.height = seaLevelHeight + (cell.distanceFromCoast * 7 + random.real(1.0, 3.9));
     }
     return cell;
   });
@@ -296,5 +300,5 @@ export default function generateMap(settings) {
 
   });
 
-  return { seaLevelHeight, cells, sides, rivers, diagram };
+  return { seaLevelHeight, cells, sides, rivers, diagram, heightmap: smallerHeightmap };
 }

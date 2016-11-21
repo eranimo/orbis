@@ -1,6 +1,6 @@
 // taken from:
 // https://bl.ocks.org/mbostock/19168c663618b7f07158
-export default function poissonDiscSampler(width, height, radius) {
+export default function poissonDiscSampler(width, height, radius, random) {
   var k = 30, // maximum number of samples before rejection
       radius2 = radius * radius,
       R = 3 * radius2,
@@ -13,17 +13,17 @@ export default function poissonDiscSampler(width, height, radius) {
       sampleSize = 0;
 
   return function() {
-    if (!sampleSize) return sample(Math.random() * width, Math.random() * height);
+    if (!sampleSize) return sample(random.random() * width, random.random() * height);
 
     // Pick a random existing sample and remove it from the queue.
     while (queueSize) {
-      var i = Math.random() * queueSize | 0,
+      var i = random.random() * queueSize | 0,
           s = queue[i];
 
       // Make a new candidate between [radius, 2 * radius] from the existing sample.
       for (var j = 0; j < k; ++j) {
-        var a = 2 * Math.PI * Math.random(),
-            r = Math.sqrt(Math.random() * R + radius2),
+        var a = 2 * Math.PI * random.random(),
+            r = Math.sqrt(random.random() * R + radius2),
             x = s[0] + r * Math.cos(a),
             y = s[1] + r * Math.sin(a);
 
