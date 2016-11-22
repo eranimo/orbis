@@ -34,6 +34,7 @@ export default function generateMap(settings) {
     riverThreshold: 50,
     width: 900,
     height: 700,
+    rivers: true
   }, settings);
 
   const random = new Random(settings.seed);
@@ -210,95 +211,99 @@ export default function generateMap(settings) {
     }
     return cell;
   });
-
-  // river flow
-  while(_.sumBy(cells, 'flow') > 0) {
-    cells.forEach(cell => {
-      const found = _.sortBy(cell.neighbors, 'height')[0];
-      if (found.type === 'land') {
-        found.water += cell.water;
-        found.flow += cell.flow;
-      }
-      cell.downstream = found;
-      cell.flow = 0;
-    });
-  }
-
   let rivers = [];
 
-  class RiverSegment {
-    constructor(cell) {
-      this.cell = cell;
-      if (this.riverSegment) {
-        throw new Error(`${cell} already has a river segment`);
-      } else {
-        cell.isRiver = true;
-        cell.riverSegment = this;
+  if (settings.rivers) {
+    // river flow
+    console.time('rivers');
+    while(_.sumBy(cells, 'flow') > 0) {
+      cells.forEach(cell => {
+        const found = _.sortBy(cell.neighbors, 'height')[0];
+        if (found.type === 'land') {
+          found.water += cell.water;
+          found.flow += cell.flow;
+        }
+        cell.downstream = found;
+        cell.flow = 0;
+      });
+    }
+
+
+    class RiverSegment {
+      constructor(cell) {
+        this.cell = cell;
+        if (this.riverSegment) {
+          throw new Error(`${cell} already has a river segment`);
+        } else {
+          cell.isRiver = true;
+          cell.riverSegment = this;
+        }
+        this.upstream = new Set();
+        this.sortedUpstream = [];
       }
-      this.upstream = new Set();
-      this.sortedUpstream = [];
-    }
 
-    addUpstream(segment) {
-      this.upstream.add(segment);
-      this.sortedUpstream = _.orderBy(Array.from(this.upstream), seg => seg.cell.water).reverse();
-    }
-
-    get trunk() {
-      return _.head(this.sortedUpstream);
-    }
-
-    get branches() {
-      return _.tail(this.sortedUpstream);
-    }
-  }
-
-  function riverStep(cell, isRoot = false) {
-    const segment = new RiverSegment(cell);
-    const neighbors = cell.neighbors
-      .filter(c => c.height > cell.height &&
-                   c.type === 'land' &&
-                   c.water > settings.riverThreshold &&
-                   c.water < cell.water);
-    if (!isRoot && cell.coastal) return segment;
-    _.uniq(neighbors).forEach(n => {
-      if (!n.isRiver) {
-        const nsegment = riverStep(n);
-        segment.addUpstream(nsegment);
+      addUpstream(segment) {
+        this.upstream.add(segment);
+        this.sortedUpstream = _.orderBy(Array.from(this.upstream), seg => seg.cell.water).reverse();
       }
-    });
-    return segment;
-  }
 
-  cells.forEach(cell => {
-    if (cell.coastal && cell.water > settings.riverThreshold && !cell.isRiver) {
-      const seg = riverStep(cell, true);
-      rivers.push(seg);
-    }
-  });
+      get trunk() {
+        return _.head(this.sortedUpstream);
+      }
 
-
-  // calculate cell distance from river
-  // TODO: use # of cells between instead of pixel distance
-  cells.forEach(cell => {
-    if (cell.type === 'ocean') return;
-    if (cell.isRiver) {
-      cell.distanceFromRiver = 0;
-      return;
+      get branches() {
+        return _.tail(this.sortedUpstream);
+      }
     }
 
-    let min = Infinity;
-    cells.forEach(c => {
-      if (c == cell) return;
-      if (!c.isRiver) return;
-      const dist = cell.center.distanceTo(c.center);
-      if (dist < min) {
-        min = dist;
+    function riverStep(cell, isRoot = false) {
+      const segment = new RiverSegment(cell);
+      const neighbors = cell.neighbors
+        .filter(c => c.height > cell.height &&
+                     c.type === 'land' &&
+                     c.water > settings.riverThreshold &&
+                     c.water < cell.water);
+      if (!isRoot && cell.coastal) return segment;
+      _.uniq(neighbors).forEach(n => {
+        if (!n.isRiver) {
+          const nsegment = riverStep(n);
+          segment.addUpstream(nsegment);
+        }
+      });
+      return segment;
+    }
+
+    cells.forEach(cell => {
+      if (cell.coastal && cell.water > settings.riverThreshold && !cell.isRiver) {
+        const seg = riverStep(cell, true);
+        rivers.push(seg);
       }
     });
-    cell.distanceFromRiver = min / settings.radius;
 
-  });
+
+    // calculate cell distance from river
+    // TODO: use # of cells between instead of pixel distance
+    cells.forEach(cell => {
+      if (cell.type === 'ocean') return;
+      if (cell.isRiver) {
+        cell.distanceFromRiver = 0;
+        return;
+      }
+
+      let min = Infinity;
+      cells.forEach(c => {
+        if (c == cell) return;
+        if (!c.isRiver) return;
+        const dist = cell.center.distanceTo(c.center);
+        if (dist < min) {
+          min = dist;
+        }
+      });
+      cell.distanceFromRiver = min / settings.radius;
+
+    });
+    console.timeEnd('rivers');
+  }
 
   return { seaLevelHeight, cells, sides, rivers, diagram, heightmap: smallerHeightmap };
 }

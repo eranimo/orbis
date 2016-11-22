@@ -45,7 +45,9 @@ class Map {
   @observable data = null;
 
   generate() {
+    console.time('map generate');
     this.data = generateMap(this.settings);
+    console.timeEnd('map generate');
     console.log(this.data);
   }
 }
@@ -69,7 +71,6 @@ class HeightmapViewer extends Component {
       canvas.width = heightmap.size;
       canvas.height = heightmap.size;
       const ctx = canvas.getContext('2d');
-      console.log(heightmap);
       for (let x = 0; x < heightmap.size; x++) {
         for (let y = 0; y < heightmap.size; y++) {
           const height = parseInt(heightmap.get(x, y), 10);

@@ -56,9 +56,9 @@ export default class DiamondSquare {
 
     this.grid = this.grid.T;
 
-    console.time('depression fill');
-    this.fillDepressions();
-    console.timeEnd('depression fill');
+    // console.time('depression fill');
+    // this.fillDepressions();
+    // console.timeEnd('depression fill');
   }
 
   // gets the x and y coordinate of a cell's 4-neighbor
@@ -136,12 +136,12 @@ export default class DiamondSquare {
       const d = Math.abs(xa - xb) + Math.abs(ya - yb);
       let cell = (this.grid.get(xa, ya) + this.grid.get(xb, yb)) / 2;
       cell += this.random.real(-0.5, 0.5) * d * this.roughness;
-      if (y === 0) {
-        this.grid.set(x, this.size - 1, cell);
-      }
-      if ((x === 0 || x === this.size - 1) && y < this.size - 1) {
-        this.grid.set(x, this.size - 1 - y, cell);
-      }
+      // if (y === 0) {
+      //   this.grid.set(x, this.size - 1, cell);
+      // }
+      // if ((x === 0 || x === this.size - 1) && y < this.size - 1) {
+      //   this.grid.set(x, this.size - 1 - y, cell);
+      // }
       this.grid.set(x, y, _.clamp(cell, 0, 255));
     }
   }
