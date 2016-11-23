@@ -8,10 +8,15 @@ export default class DiamondSquare {
 
   constructor(options, random) {
     // prepare the grid
-    this.finalSize = options.size || 512;
-    this.size = this.finalSize / 2 || 256;
-    this.roughness = options.roughness || 2;
+    this.size = options.size || 256;
+    this.roughness = options.roughness || 1;
     this.random = random;
+    this.cornerPoints = options.cornerPoints;
+    this.wrap = options.wrap;
+    this.range = options.range || { low: 0, high: 255 };
+    this.mutate = options.mutate;
+    this.sideGetters = options.sideGetters;
+    this.flip = options.flip || false;
   }
 
   get(x, y) {
@@ -23,38 +28,57 @@ export default class DiamondSquare {
   }
 
   generate() {
-    const top = this.random.randomInt(255);
-    const bottom = this.random.randomInt(255);
-
     this.grid = nj.zeros([this.size, this.size], 'float32');
-    this.grid.set(0, 0, top);
-    this.grid.set(this.size - 1, 0, top);
-    this.grid.set(0, this.size - 1, bottom);
-    this.grid.set(this.size - 1, this.size - 1, bottom);
+    if (this.cornerPoints) {
+      this.grid.set(0, 0, this.cornerPoints.topLeft);
+      this.grid.set(this.size - 1, 0, this.cornerPoints.topRight);
+      this.grid.set(0, this.size - 1, this.cornerPoints.bottomLeft);
+      this.grid.set(this.size - 1, this.size - 1, this.cornerPoints.bottomRight);
+    } else {
+      const { low, high } = this.range;
+      const top = this.random.integer(low, high);
+      const bottom = this.random.integer(low, high);
+
+      this.grid.set(0, 0, top);
+      this.grid.set(this.size - 1, 0, top);
+      this.grid.set(0, this.size - 1, bottom);
+      this.grid.set(this.size - 1, this.size - 1, bottom);
+    }
 
     this._diamond(0, 0, this.size - 1, this.size - 1);
 
-    this.maxHeight = _.round(this.grid.max());
-    this.minHeight = _.round(this.grid.min());
-    this.avgHeight = _.round(this.grid.mean());
-
     // simple erosion
-    for (let x = 0; x < this.size; x++) {
-      for (let y = 0; y < this.size; y++) {
+    for (let x = 1; x < this.size - 1; x++) {
+      for (let y = 1; y < this.size - 1; y++) {
         this.grid.set(x, y, _.mean([
-          this.grid.get(x + 1, y + 1) || 0,
-          this.grid.get(x - 1, y - 1) || 0,
-          this.grid.get(x - 1, y + 1) || 0,
-          this.grid.get(x + 1, y - 1) || 0,
-          this.grid.get(x, y + 1) || 0,
-          this.grid.get(x + 1, y) || 0,
-          this.grid.get(x, y - 1) || 0,
-          this.grid.get(x - 1, y) || 0
+          this.grid.get(x + 1, y + 1),
+          this.grid.get(x - 1, y - 1),
+          this.grid.get(x - 1, y + 1),
+          this.grid.get(x + 1, y - 1),
+          this.grid.get(x, y + 1),
+          this.grid.get(x + 1, y),
+          this.grid.get(x, y - 1),
+          this.grid.get(x - 1, y)
         ]));
       }
     }
 
-    this.grid = this.grid.T;
+    if (this.flip) {
+      this.grid = this.grid.T;
+    }
+
+    if (this.mutate) {
+      for (let x = 0; x < this.size; x++) {
+        for (let y = 0; y < this.size; y++) {
+          const height = this.grid.get(x, y);
+          this.grid.set(x, y, this.mutate(height, x, y));
+        }
+      }
+    }
+
+    this.maxHeight = _.round(this.grid.max());
+    this.minHeight = _.round(this.grid.min());
+    this.avgHeight = _.round(this.grid.mean());
 
     // console.time('depression fill');
     // this.fillDepressions();
@@ -134,15 +158,28 @@ export default class DiamondSquare {
   _square(xa, ya, x, y, xb, yb) {
     if (this.grid.get(x, y) === 0) {
       const d = Math.abs(xa - xb) + Math.abs(ya - yb);
-      let cell = (this.grid.get(xa, ya) + this.grid.get(xb, yb)) / 2;
-      cell += this.random.real(-0.5, 0.5) * d * this.roughness;
-      // if (y === 0) {
-      //   this.grid.set(x, this.size - 1, cell);
-      // }
-      // if ((x === 0 || x === this.size - 1) && y < this.size - 1) {
-      //   this.grid.set(x, this.size - 1 - y, cell);
-      // }
-      this.grid.set(x, y, _.clamp(cell, 0, 255));
+      let value = (this.grid.get(xa, ya) + this.grid.get(xb, yb)) / 2;
+      value += this.random.real(-0.5, 0.5) * d * this.roughness;
+      // Wrap around map:
+      if (this.wrap) {
+        if (y === 0) {
+          this.grid.set(x, this.size - 1, value);
+        }
+        if ((x === 0 || x === this.size - 1) && y < this.size - 1) {
+          this.grid.set(x, this.size - 1 - y, value);
+        }
+      } else if (this.sideGetters){
+        if (y === 0) {
+          value = this.sideGetters.west(x, y, value);
+        } else if (y === this.size - 1) {
+          value = this.sideGetters.east(x, y, value);
+        } else if (x === 0) {
+          value = this.sideGetters.north(x, y, value);
+        } else if (x === this.size - 1) {
+          value = this.sideGetters.south(x, y, value);
+        }
+      }
+      this.grid.set(x, y, _.clamp(value, this.range.low, this.range.high));
     }
   }
 

@@ -15,6 +15,10 @@ export default class Random {
     return RandomJS.integer(0, max)(this.engine);
   }
 
+  integer(low, high) {
+    return RandomJS.integer(low, high)(this.engine);
+  }
+
   random() {
     return RandomJS.real(0, 1)(this.engine);
   }

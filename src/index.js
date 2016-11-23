@@ -1,13 +1,12 @@
 import React from 'react';
 import ReactDom from 'react-dom';
-import Map from './components/Map';
+import TileView from './components/TileView';
 
 
 function App() {
   return (
     <div>
-      <h1>Orbis</h1>
-      <Map />
+      <TileView />
     </div>
   )
 }
