@@ -2,6 +2,7 @@
 import React, { Component, PropTypes } from 'react';
 import DiamondSquare from '../utils/diamondSquare';
 import Random from '../utils/random';
+import olsenNoise from '../utils/olsenNoise';
 
 
 const MAP_SIZE = 30;
@@ -67,10 +68,14 @@ export default class TileView extends Component {
         if (heightmap) {
 
           // draw each pixel in the heightmap
-          for (let hx = 0; hx < heightmap.size; hx++) {
-            for (let hy = 0; hy < heightmap.size; hy++) {
-              const height = Math.round(heightmap.get(hx, hy) / 10) * 10;
-              ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
+          for (let hx = 0; hx < CELL_SIZE; hx++) {
+            for (let hy = 0; hy < CELL_SIZE; hy++) {
+              const height = Math.round(heightmap.get(hx * 10, hy * 10) / 10) * 10;
+              if (height < 100) {
+                ctx.fillStyle = `rgb(0, 0, 200)`;
+              } else {
+                ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
+              }
               ctx.fillRect(
                 (tx * CELL_SIZE) + hx,
                 (ty * CELL_SIZE) + hy,
@@ -112,108 +117,17 @@ export default class TileView extends Component {
     });
   }
   generateTile(tx, ty) {
-    console.log(`Making tile for (${tx}, ${ty})`);
-    /*
-    if two or more adjacent sides haven't been generated yet,
-    average together the two neighboring cell's heights to get that corner point
-    to start the diamond square algorithm with
-
-    height range of the generator should be the max and min of the neighboring edge points
-    */
-    const tileHeight = this.worldMap.get(tx, ty);
-    const neighborHeights = {
-      north: ty > 0
-        ? this.worldMap.get(tx, ty - 1)
-        : null, // north end of map
-      south: ty < MAP_SIZE - 1
-        ? this.worldMap.get(tx, ty + 1)
-        : null, // south end of map
-      east: tx < MAP_SIZE - 1
-        ? this.worldMap.get(tx + 1, ty)
-        : this.worldMap.get(0, ty), // wrap around
-      west: tx > 0
-        ? this.worldMap.get(tx - 1, ty)
-        : this.worldMap.get(MAP_SIZE - 1, ty)
-    };
-
-    const neighborTile = {
-      north: ty > 0
-        ? this.tiles[tx][ty - 1]
-        : null,
-      south: ty < MAP_SIZE - 1
-        ? this.tiles[tx][ty + 1]
-        : null,
-      east: tx < MAP_SIZE - 1
-        ? this.tiles[tx + 1][ty]
-        : this.tiles[0][ty],
-      west: tx > 0
-        ? this.tiles[tx - 1][ty]
-        : this.tiles[MAP_SIZE - 1][ty]
-    };
-
-    const cornerPoints = {
-      topLeft: neighborHeights.north && neighborHeights.west
-        ? (neighborHeights.north + neighborHeights.west) / 2
-        : tileHeight,
-      topRight: neighborHeights.north && neighborHeights.east
-        ? (neighborHeights.north + neighborHeights.east) / 2
-        : tileHeight,
-      bottomLeft: neighborHeights.south && neighborHeights.west
-        ? (neighborHeights.south + neighborHeights.west) / 2
-        : tileHeight,
-      bottomRight: neighborHeights.south && neighborHeights.east
-        ? (neighborHeights.south + neighborHeights.east) / 2
-        : tileHeight
-    };
-
-    console.log(neighborHeights);
-    console.log(cornerPoints);
-
-    const heightmap = new DiamondSquare({
-      size: CELL_SIZE,
-      wrap: false,
-      roughness: 1,
-      range: {
-        low: 0,
-        high: 255
-      },
-      flip: true,
-      // mutate: (height, x, y) => tileHeight + height,
-      // functions to get the sides of this map dependenting on the neighbors
-      // each function is used to find the pixels at that side
-      sideGetters: {
-        north: (cx, cy, v) => {
-          return neighborTile.north
-            ? neighborTile.north.get(cx, -1)
-            : 0;
-        },
-        south: (cx, cy, v) => {
-          return neighborTile.south
-            ? neighborTile.south.get(cx, MAP_SIZE - 1)
-            : 0;
-        },
-        east: (cx, cy, v) => {
-          return neighborTile.east
-            ? neighborTile.east.get(cy, MAP_SIZE - 1)
-            : 0;
-        },
-        west: (cx, cy, v) => {
-          return neighborTile.west
-            ? neighborTile.west.get(0, MAP_SIZE - 1)
-            : 0;
-        }
-      },
-      cornerPoints
-    }, random);
-    heightmap.generate();
-    this.tiles[tx][ty] = heightmap;
-
-    console.log(
-      'top left',
-      cornerPoints.topLeft,
-      heightmap.get(0, 0)
+    console.time(`Making tile for (${tx}, ${ty})`);
+    const canvas = this.refs.tile;
+    const heightmap = olsenNoise(
+      500,
+      500,
+      tx * 500,
+      ty * 500
     );
-    console.log(heightmap);
+    this.tiles[tx][ty] = heightmap;
+    window.heightmap = heightmap;
+    console.timeEnd(`Making tile for (${tx}, ${ty})`);
   }
   saveMap() {
     // save the map to local storage
