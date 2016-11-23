@@ -11,7 +11,7 @@ export default function olsenNoise(width, height, xpos = 0, ypos = 0, seed = 0) 
 
   var stride = width + buildbuffer;
   var colorvalues = new Array(stride * (height + buildbuffer));
-  var iterations = 10;
+  var iterations = 11;
   var singlecolor = true;
 
 

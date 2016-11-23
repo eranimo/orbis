@@ -6,93 +6,69 @@ import olsenNoise from '../utils/olsenNoise';
 
 
 const MAP_SIZE = 30;
-const CELL_SIZE = 50;
+const CELL_SIZE = 1;
+const TILE_SIZE = 500;
+const MAP_CELL_WIDTH = 50;
+const MAP_CELL_HEIGHT = 50;
 const random = new Random();
+
+const MAP_SEED = 100; //random.integer(0, 10000);
 
 export default class TileView extends Component {
   constructor() {
     super();
     this.state = {
       cx: null,
-      cy: null
+      cy: null,
+      tx: 0,
+      ty: 0
     };
   }
   componentDidMount() {
-    this.remake();
+    this.init();
   }
   componentDidUpdate() {
-    this.draw();
+    this.init();
   }
-  remake() {
-    console.time('generate');
+  init() {
+    console.time('init');
     this.tiles = _.times(MAP_SIZE, () => _.times(MAP_SIZE, _.constant(null)));
-    this.generate();
+    this.generateTile(this.state.tx, this.state.ty);
     this.draw();
     this.setupEvents();
-    console.timeEnd('generate');
-  }
-  generate() {
-    this.random = random;
-    const heightmap = new DiamondSquare({
-      size: MAP_SIZE,
-      wrap: true,
-      roughness: 40
-    }, random);
-    heightmap.generate();
-    console.log(`Average height: ${heightmap.avgHeight}`);
-    this.worldMap = heightmap;
-  }
-  decidePixelColor(x, y, heightmap, sealevel = heightmap.avgHeight) {
-    const height = parseInt(heightmap.get(x, y), 10);
-    return height < sealevel
-      ? `rgb(0, 0, ${200 - parseInt(heightmap.minHeight - height, 10) * 5})`
-      : `rgb(0, ${200 + parseInt(height - heightmap.avgHeight, 10) * 5}, 0)`;
+    console.timeEnd('init');
   }
   draw() {
     const { cx, cy } = this.state;
     const canvas = this.refs.tile;
-    canvas.width = this.worldMap.size * CELL_SIZE;
-    canvas.height = this.worldMap.size * CELL_SIZE;
+    canvas.width = this.heightmap.shape[0] * CELL_SIZE;
+    canvas.height = this.heightmap.shape[0] * CELL_SIZE;
     const ctx = canvas.getContext('2d');
 
-    for (let x = 0; x < this.worldMap.size; x++) {
-      for (let y = 0; y < this.worldMap.size; y++) {
-        ctx.fillStyle = this.decidePixelColor(x, y, this.worldMap);
-        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      }
-    }
 
-    for (let tx = 0; tx < this.worldMap.size; tx++) {
-      for (let ty = 0; ty < this.worldMap.size; ty++) {
-        const heightmap = this.tiles[tx][ty];
-        if (heightmap) {
-
-          // draw each pixel in the heightmap
-          for (let hx = 0; hx < CELL_SIZE; hx++) {
-            for (let hy = 0; hy < CELL_SIZE; hy++) {
-              const height = Math.round(heightmap.get(hx * 10, hy * 10) / 10) * 10;
-              if (height < 100) {
-                ctx.fillStyle = `rgb(0, 0, 200)`;
-              } else {
-                ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
-              }
-              ctx.fillRect(
-                (tx * CELL_SIZE) + hx,
-                (ty * CELL_SIZE) + hy,
-                1, 1
-              );
-            }
-          }
+    // draw each pixel in the heightmap
+    for (let hx = 0; hx < TILE_SIZE; hx++) {
+      for (let hy = 0; hy < TILE_SIZE; hy++) {
+        const height = Math.round(this.heightmap.get(hx, hy) / 5) * 5;
+        if (height < 210) {
+          ctx.fillStyle = `rgb(0, 0, 200)`;
+        } else {
+          ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
         }
+        ctx.fillRect(
+          hx * CELL_SIZE,
+          hy * CELL_SIZE,
+          CELL_SIZE, CELL_SIZE
+        );
       }
     }
 
-    if (cx !== null && cy !== null) {
-      ctx.strokeStyle = `black`;
-      ctx.strokeWidth = 1;
-      ctx.rect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      ctx.stroke();
-    }
+    // if (cx !== null && cy !== null) {
+    //   ctx.strokeStyle = `black`;
+    //   ctx.strokeWidth = 1;
+    //   ctx.rect(cx * CELL_SIZE, cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    //   ctx.stroke();
+    // }
   }
   pointToCell(event) {
     let { pageX: mx, pageY: my } = event;
@@ -104,15 +80,14 @@ export default class TileView extends Component {
   }
   setupEvents() {
     const canvas = this.refs.tile;
-    canvas.addEventListener('mousemove', event => {
-      const { cx, cy } = this.pointToCell(event);
-      this.setState({ cx, cy });
-    });
+    // canvas.addEventListener('mousemove', event => {
+    //   const { cx, cy } = this.pointToCell(event);
+    //   this.setState({ cx, cy });
+    // });
 
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
       console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.worldMap.get(cx, cy)})`);
-      this.generateTile(cx, cy);
       this.draw();
     });
   }
@@ -120,17 +95,54 @@ export default class TileView extends Component {
     console.time(`Making tile for (${tx}, ${ty})`);
     const canvas = this.refs.tile;
     const heightmap = olsenNoise(
-      500,
-      500,
-      tx * 500,
-      ty * 500
+      TILE_SIZE,
+      TILE_SIZE,
+      tx * TILE_SIZE,
+      ty * TILE_SIZE,
+      MAP_SEED
     );
     this.tiles[tx][ty] = heightmap;
-    window.heightmap = heightmap;
+    this.heightmap = heightmap;
     console.timeEnd(`Making tile for (${tx}, ${ty})`);
   }
   saveMap() {
     // save the map to local storage
+  }
+  neighborExists(direction) {
+    const { tx, ty } = this.state;
+    if (direction === 'east') {
+      return tx === MAP_CELL_WIDTH;
+    } else if (direction === 'west') {
+      return tx === 0;
+    } else if (direction === 'south') {
+      return ty === MAP_CELL_HEIGHT;
+    } else if (direction === 'north') {
+      return ty === 0;
+    }
+  }
+  goToNeighbor(direction) {
+    const { tx, ty } = this.state;
+    if (direction === 'east') {
+      this.setState({
+        tx: tx + 1,
+        ty
+      });
+    } else if (direction === 'west') {
+      this.setState({
+        tx: tx - 1,
+        ty
+      });
+    } else if (direction === 'south') {
+      this.setState({
+        tx,
+        ty: ty + 1
+      });
+    } else if (direction === 'north') {
+      this.setState({
+        tx,
+        ty: ty - 1
+      });
+    }
   }
   render() {
     return (
@@ -143,8 +155,29 @@ export default class TileView extends Component {
           Click on a tile to generate its detailed heightmap
         </p>
         <div>
-          <h3>Controls:</h3>
-          <button onClick={() => this.remake()}>New Map</button>
+          <div>
+            Location: ({this.state.tx}, {this.state.ty})
+          </div>
+          <button
+            disabled={this.neighborExists('east')}
+            onClick={this.goToNeighbor.bind(this, 'east')}>
+            East
+          </button>
+          <button
+            disabled={this.neighborExists('west')}
+            onClick={this.goToNeighbor.bind(this, 'west')}>
+            West
+          </button>
+          <button
+            disabled={this.neighborExists('south')}
+            onClick={this.goToNeighbor.bind(this, 'south')}>
+            South
+          </button>
+          <button
+            disabled={this.neighborExists('north')}
+            onClick={this.goToNeighbor.bind(this, 'north')}>
+            North
+          </button>
         </div>
         <canvas ref="tile" />
         <div>
