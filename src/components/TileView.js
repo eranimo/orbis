@@ -6,13 +6,13 @@ import olsenNoise from '../utils/olsenNoise';
 
 
 const MAP_SIZE = 30;
-const CELL_SIZE = 1;
+const CELL_SIZE = 2;
 const TILE_SIZE = 500;
 const MAP_CELL_WIDTH = 50;
 const MAP_CELL_HEIGHT = 50;
 const random = new Random();
 
-const MAP_SEED = 100; //random.integer(0, 10000);
+const MAP_SEED = 6681; // random.integer(0, 10000);
 
 export default class TileView extends Component {
   constructor() {
@@ -21,7 +21,7 @@ export default class TileView extends Component {
       cx: null,
       cy: null,
       tx: 0,
-      ty: 0
+      ty: 1
     };
   }
   componentDidMount() {
@@ -50,7 +50,7 @@ export default class TileView extends Component {
     for (let hx = 0; hx < TILE_SIZE; hx++) {
       for (let hy = 0; hy < TILE_SIZE; hy++) {
         const height = Math.round(this.heightmap.get(hx, hy) / 5) * 5;
-        if (height < 210) {
+        if (height < 140) {
           ctx.fillStyle = `rgb(0, 0, 200)`;
         } else {
           ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
@@ -87,8 +87,7 @@ export default class TileView extends Component {
 
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
-      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.worldMap.get(cx, cy)})`);
-      this.draw();
+      console.log(`Clicked on cell (${cx}, ${cy})`);
     });
   }
   generateTile(tx, ty) {
@@ -156,7 +155,8 @@ export default class TileView extends Component {
         </p>
         <div>
           <div>
-            Location: ({this.state.tx}, {this.state.ty})
+            Location: ({this.state.tx}, {this.state.ty})<br />
+            Seed: {MAP_SEED}
           </div>
           <button
             disabled={this.neighborExists('east')}
