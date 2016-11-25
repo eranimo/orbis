@@ -1,5 +1,6 @@
 /* @flow */
 import React, { Component, PropTypes } from 'react';
+import _ from 'lodash';
 import DiamondSquare from '../utils/diamondSquare';
 import Random from '../utils/random';
 import olsenNoise from '../utils/olsenNoise';
@@ -17,10 +18,37 @@ const SEA_LEVEL = 140;
 
 const MAP_SEED = 6681; // random.integer(0, 10000);
 
+class Cell {
+  constructor(cx, cy, tile) {
+    this.cx = cx;
+    this.cy = cy;
+    this.tile = tile;
+  }
+
+  get type() {
+    return this.height < this.tile.world.sealevel ? 'ocean' : 'land';
+  }
+
+  isLand() {
+    return this.type === 'land';
+  }
+
+  isOcean() {
+    return this.type === 'ocean';
+  }
+
+  get neighbors() {
+    return this.tile.getNeighbors(this.cx, this.cy);
+  }
+}
+
+
 class Tile {
-  constructor(tx, ty) {
+  constructor(tx, ty, world) {
     this.tx = tx;
     this.ty = ty;
+
+    this.world = world;
 
     this.heightmap = olsenNoise(
       TILE_SIZE,
@@ -29,22 +57,71 @@ class Tile {
       ty * TILE_SIZE,
       MAP_SEED
     );
+
+    this.width = this.heightmap.shape[0];
+    this.height = this.heightmap.shape[1];
+
+    const coordinateHash = (x, y) => `${x}-${y}`;
+    this.getNeighbors = _.memoize(this._getNeighbors, coordinateHash);
+
+    this.cells = _.times(world.width, () => _.times(world.height, _.constant(null)));
+  }
+
+  getCell(x, y) {
+    if (this.cells[x][y] === null) {
+      this.cells[x][y] = new Cell(x, y, this);
+    }
+    return this.cells[x][y];
+  }
+
+  _getNeighbors(x, y) {
+    const n = [];
+    if (x !== this.width - 1 && y !== this.height - 1) {
+      n.push([x + 1, y + 1]);
+    }
+    if (x !== 0 && y !== 0) {
+      n.push([x - 1, y - 1]);
+    }
+    if (x !== 0 && y !== this.height - 1) {
+      n.push([x - 1, y + 1]);
+    }
+    if (x !== this.width - 1 && y !== 0) {
+      n.push([x + 1, y - 1]);
+    }
+    if (y !== this.height - 1) {
+      n.push([x, y + 1]);
+    }
+    if (x !== this.width - 1) {
+      n.push([x + 1, y]);
+    }
+    if (y !== 0) {
+      n.push([x, y - 1]);
+    }
+    if (x !== 0) {
+      n.push([x - 1, y]);
+    }
+    return n;
   }
 
 }
 
 
 class WorldMap {
-  constructor(width, height) {
+  constructor(width, height, sealevel) {
     this.width = width;
     this.height = height;
-    this.tiles = _.times(MAP_SIZE, () => _.times(MAP_SIZE, _.constant(null)));
+    this.sealevel = sealevel;
+    this.tiles = _.times(width, () => _.times(height, _.constant(null)));
   }
 
   generateTile(tx, ty) {
     if (this.tiles[tx][ty] === null) {
-      this.tiles[tx][ty] = new Tile(tx, ty);
+      this.tiles[tx][ty] = new Tile(tx, ty, this);
     }
+    return this.tiles[tx][ty];
+  }
+
+  getTile(tx, ty) {
     return this.tiles[tx][ty];
   }
 }
@@ -62,7 +139,7 @@ export default class TileView extends Component {
     };
   }
   componentDidMount() {
-    this.worldMap = new WorldMap(MAP_CELL_WIDTH, MAP_CELL_HEIGHT);
+    this.worldMap = new WorldMap(MAP_CELL_WIDTH, MAP_CELL_HEIGHT, SEA_LEVEL);
     this.init();
   }
   componentDidUpdate() {
@@ -94,7 +171,7 @@ export default class TileView extends Component {
     for (let hx = 0; hx < TILE_SIZE; hx++) {
       for (let hy = 0; hy < TILE_SIZE; hy++) {
         const height = Math.round(this.currentTile.heightmap.get(hx, hy) / 5) * 5;
-        if (height < SEA_LEVEL) {
+        if (height < this.worldMap.sealevel) {
           ctx.fillStyle = 'blue';
         } else {
           ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
