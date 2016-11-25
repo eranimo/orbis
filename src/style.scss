@@ -1,8 +1,14 @@
 @import '~flexboxgrid/css/flexboxgrid.css';
+@import '~@blueprintjs/core/dist/blueprint.css';
+@import '~@blueprintjs/core/dist/variables';
 
 body {
-  background-color: #DDD;
-  font-family: Helvetica;
+  background-color: $pt-dark-app-background-color;
+  color: $pt-dark-text-color;
+}
+
+p, h1, h2, h3, h4, h5 {
+  color: $pt-dark-text-color;
 }
 
 canvas {

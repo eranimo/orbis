@@ -3,6 +3,8 @@ import React, { Component, PropTypes } from 'react';
 import DiamondSquare from '../utils/diamondSquare';
 import Random from '../utils/random';
 import olsenNoise from '../utils/olsenNoise';
+import { Button } from '@blueprintjs/core';
+
 
 
 const MAP_SIZE = 30;
@@ -158,30 +160,33 @@ export default class TileView extends Component {
             Location: ({this.state.tx}, {this.state.ty})<br />
             Seed: {MAP_SEED}
           </div>
-          <button
-            disabled={this.neighborExists('east')}
-            onClick={this.goToNeighbor.bind(this, 'east')}>
-            East
-          </button>
-          <button
-            disabled={this.neighborExists('west')}
-            onClick={this.goToNeighbor.bind(this, 'west')}>
-            West
-          </button>
-          <button
-            disabled={this.neighborExists('south')}
-            onClick={this.goToNeighbor.bind(this, 'south')}>
-            South
-          </button>
-          <button
-            disabled={this.neighborExists('north')}
-            onClick={this.goToNeighbor.bind(this, 'north')}>
-            North
-          </button>
+          <div className="pt-button-group">
+            <Button
+              disabled={this.neighborExists('west')}
+              onClick={this.goToNeighbor.bind(this, 'west')}
+              iconName="pt-icon-double-chevron-left"
+              text="West" />
+            <Button
+              disabled={this.neighborExists('south')}
+              onClick={this.goToNeighbor.bind(this, 'south')}
+              iconName="pt-icon-double-chevron-down"
+              text="South" />
+            <Button
+              disabled={this.neighborExists('north')}
+              onClick={this.goToNeighbor.bind(this, 'north')}
+              iconName="pt-icon-double-chevron-up"
+              text="North" />
+            <Button
+              disabled={this.neighborExists('east')}
+              onClick={this.goToNeighbor.bind(this, 'east')}
+              iconName="pt-icon-double-chevron-right"
+              text="East" />
+          </div>
         </div>
+        <br />
         <canvas ref="tile" />
         <div>
-          <button onClick={() => this.saveMap()}>Save Map</button>
+          <Button onClick={() => this.saveMap()} text="Save Map" />
         </div>
       </div>
     )

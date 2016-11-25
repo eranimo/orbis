@@ -20,6 +20,10 @@ module.exports = {
       {
         test: /\.scss$/,
         loaders: ["style", "css", "sass"]
+      },
+      {
+          test: /\.(eot|svg|ttf|woff|woff2)$/,
+          loader: 'file'
       }
     ]
   },
