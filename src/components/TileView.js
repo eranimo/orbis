@@ -17,6 +17,40 @@ const SEA_LEVEL = 140;
 
 const MAP_SEED = 6681; // random.integer(0, 10000);
 
+class Tile {
+  constructor(tx, ty) {
+    this.tx = tx;
+    this.ty = ty;
+
+    this.heightmap = olsenNoise(
+      TILE_SIZE,
+      TILE_SIZE,
+      tx * TILE_SIZE,
+      ty * TILE_SIZE,
+      MAP_SEED
+    );
+  }
+
+}
+
+
+class WorldMap {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    this.tiles = _.times(MAP_SIZE, () => _.times(MAP_SIZE, _.constant(null)));
+  }
+
+  generateTile(tx, ty) {
+    if (this.tiles[tx][ty] === null) {
+      this.tiles[tx][ty] = new Tile(tx, ty);
+    }
+    return this.tiles[tx][ty];
+  }
+}
+
+
+
 export default class TileView extends Component {
   constructor() {
     super();
@@ -28,33 +62,40 @@ export default class TileView extends Component {
     };
   }
   componentDidMount() {
+    this.worldMap = new WorldMap(MAP_CELL_WIDTH, MAP_CELL_HEIGHT);
     this.init();
   }
   componentDidUpdate() {
     this.init();
   }
   init() {
-    console.time('init');
-    this.tiles = _.times(MAP_SIZE, () => _.times(MAP_SIZE, _.constant(null)));
-    this.generateTile(this.state.tx, this.state.ty);
+    console.group(`Initialize tile ${this.state.tx}, ${this.state.ty}`);
+
+    console.time('Generate or get tile');
+    this.worldMap.generateTile(this.state.tx, this.state.ty);
+    console.timeEnd('Generate or get tile');
+
+    console.time('Draw tile');
     this.draw();
+    console.timeEnd('Draw tile');
+
     this.setupEvents();
-    console.timeEnd('init');
+    console.groupEnd(`Initialize tile ${this.state.tx}, ${this.state.ty}`);
   }
   draw() {
     const { cx, cy } = this.state;
     const canvas = this.refs.tile;
-    canvas.width = this.heightmap.shape[0] * CELL_SIZE;
-    canvas.height = this.heightmap.shape[0] * CELL_SIZE;
+    canvas.width = this.currentTile.heightmap.shape[0] * CELL_SIZE;
+    canvas.height = this.currentTile.heightmap.shape[0] * CELL_SIZE;
     const ctx = canvas.getContext('2d');
 
 
-    // draw each pixel in the heightmap
+    // draw each pixel in the currentTile.heightmap
     for (let hx = 0; hx < TILE_SIZE; hx++) {
       for (let hy = 0; hy < TILE_SIZE; hy++) {
-        const height = Math.round(this.heightmap.get(hx, hy) / 5) * 5;
+        const height = Math.round(this.currentTile.heightmap.get(hx, hy) / 5) * 5;
         if (height < SEA_LEVEL) {
-          ctx.fillStyle = `rgb(0, 0, 200)`;
+          ctx.fillStyle = 'blue';
         } else {
           ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
         }
@@ -66,21 +107,6 @@ export default class TileView extends Component {
       }
     }
 
-    for (let hx = 0; hx < TILE_SIZE; hx++) {
-      for (let hy = 0; hy < TILE_SIZE; hy++) {
-        const height = this.heightmap.get(hx, hy);
-        if (height > SEA_LEVEL) {
-          // const blue = parseInt((this.flow.flowmap.get(hx, hy) / this.flow.flowmapMax) * 255, 10);
-          const blue = this.flow.flowmap.get(hx, hy) > 100 ? 255 : 0;
-          ctx.fillStyle = `rgb(0, 0, ${blue})`;
-          ctx.fillRect(
-            hx * CELL_SIZE,
-            hy * CELL_SIZE,
-            CELL_SIZE, CELL_SIZE
-          );
-        }
-      }
-    }
 
     // if (cx !== null && cy !== null) {
     //   ctx.strokeStyle = `black`;
@@ -106,33 +132,11 @@ export default class TileView extends Component {
 
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
-      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.heightmap.get(cx, cy)}, water: ${this.flow.watermap.get(cx, cy)}, flow: ${this.flow.flowmap.get(cx, cy)})`);
-      console.log(this.flow.neighbors(cx, cy));
+      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.currentTile.heightmap.get(cx, cy)})`);
     });
   }
-  generateTile(tx, ty) {
-    console.group(`Tile Generation for (${tx}, ${ty})`);
-    console.time(`Making tile for (${tx}, ${ty})`);
-    const canvas = this.refs.tile;
-    const heightmap = olsenNoise(
-      TILE_SIZE,
-      TILE_SIZE,
-      tx * TILE_SIZE,
-      ty * TILE_SIZE,
-      MAP_SEED
-    );
-    this.tiles[tx][ty] = heightmap;
-    this.heightmap = heightmap;
-    console.timeEnd(`Making tile for (${tx}, ${ty})`);
-
-    console.time('flow');
-    this.flow = new Flow(heightmap, SEA_LEVEL);
-    this.flow.step()
-    console.timeEnd('flow');
-    console.groupEnd(`Tile Generation for (${tx}, ${ty})`);
-  }
-  saveMap() {
-    // save the map to local storage
+  get currentTile() {
+    return this.worldMap.tiles[this.state.tx][this.state.ty];
   }
   neighborExists(direction) {
     const { tx, ty } = this.state;
@@ -210,9 +214,6 @@ export default class TileView extends Component {
         </div>
         <br />
         <canvas ref="tile" />
-        <div>
-          <Button onClick={() => this.saveMap()} text="Save Map" />
-        </div>
       </div>
     )
   }
