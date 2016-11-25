@@ -4,6 +4,7 @@ import DiamondSquare from '../utils/diamondSquare';
 import Random from '../utils/random';
 import olsenNoise from '../utils/olsenNoise';
 import { Button } from '@blueprintjs/core';
+import Flow from '../utils/flow';
 
 
 const MAP_SIZE = 30;
@@ -65,6 +66,22 @@ export default class TileView extends Component {
       }
     }
 
+    for (let hx = 0; hx < TILE_SIZE; hx++) {
+      for (let hy = 0; hy < TILE_SIZE; hy++) {
+        const height = this.heightmap.get(hx, hy);
+        if (height > SEA_LEVEL) {
+          // const blue = parseInt((this.flow.flowmap.get(hx, hy) / this.flow.flowmapMax) * 255, 10);
+          const blue = this.flow.flowmap.get(hx, hy) > 100 ? 255 : 0;
+          ctx.fillStyle = `rgb(0, 0, ${blue})`;
+          ctx.fillRect(
+            hx * CELL_SIZE,
+            hy * CELL_SIZE,
+            CELL_SIZE, CELL_SIZE
+          );
+        }
+      }
+    }
+
     // if (cx !== null && cy !== null) {
     //   ctx.strokeStyle = `black`;
     //   ctx.strokeWidth = 1;
@@ -89,10 +106,12 @@ export default class TileView extends Component {
 
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
-      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.heightmap.get(cx, cy)})`);
+      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.heightmap.get(cx, cy)}, water: ${this.flow.watermap.get(cx, cy)}, flow: ${this.flow.flowmap.get(cx, cy)})`);
+      console.log(this.flow.neighbors(cx, cy));
     });
   }
   generateTile(tx, ty) {
+    console.group(`Tile Generation for (${tx}, ${ty})`);
     console.time(`Making tile for (${tx}, ${ty})`);
     const canvas = this.refs.tile;
     const heightmap = olsenNoise(
@@ -105,6 +124,12 @@ export default class TileView extends Component {
     this.tiles[tx][ty] = heightmap;
     this.heightmap = heightmap;
     console.timeEnd(`Making tile for (${tx}, ${ty})`);
+
+    console.time('flow');
+    this.flow = new Flow(heightmap, SEA_LEVEL);
+    this.flow.step()
+    console.timeEnd('flow');
+    console.groupEnd(`Tile Generation for (${tx}, ${ty})`);
   }
   saveMap() {
     // save the map to local storage
