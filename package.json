@@ -25,6 +25,7 @@
     "react": "^15.3.2",
     "react-addons-css-transition-group": "^15.4.1",
     "react-dom": "^15.3.2",
+    "simplex-noise": "^2.2.0",
     "voronoi": "^1.0.0"
   },
   "devDependencies": {

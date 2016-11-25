@@ -6,13 +6,13 @@ import olsenNoise from '../utils/olsenNoise';
 import { Button } from '@blueprintjs/core';
 
 
-
 const MAP_SIZE = 30;
-const CELL_SIZE = 2;
+const CELL_SIZE = 1;
 const TILE_SIZE = 500;
 const MAP_CELL_WIDTH = 50;
 const MAP_CELL_HEIGHT = 50;
 const random = new Random();
+const SEA_LEVEL = 140;
 
 const MAP_SEED = 6681; // random.integer(0, 10000);
 
@@ -22,7 +22,7 @@ export default class TileView extends Component {
     this.state = {
       cx: null,
       cy: null,
-      tx: 0,
+      tx: 1,
       ty: 1
     };
   }
@@ -52,7 +52,7 @@ export default class TileView extends Component {
     for (let hx = 0; hx < TILE_SIZE; hx++) {
       for (let hy = 0; hy < TILE_SIZE; hy++) {
         const height = Math.round(this.heightmap.get(hx, hy) / 5) * 5;
-        if (height < 140) {
+        if (height < SEA_LEVEL) {
           ctx.fillStyle = `rgb(0, 0, 200)`;
         } else {
           ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
@@ -89,7 +89,7 @@ export default class TileView extends Component {
 
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
-      console.log(`Clicked on cell (${cx}, ${cy})`);
+      console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.heightmap.get(cx, cy)})`);
     });
   }
   generateTile(tx, ty) {

@@ -6,12 +6,12 @@ import nj from 'numjs';
 export default function olsenNoise(width, height, xpos = 0, ypos = 0, seed = 0) {
   var SCALE_FACTOR = 2;
   //The scale factor is kind of arbitrary, but the code is only consistent for 2 currently. Gives noise for other scale but not location proper.
-  var BLUR_EDGE = 2; //extra pixels are needed for the blur (3 - 1).
+  var BLUR_EDGE = 3; //extra pixels are needed for the blur (3 - 1).
   var buildbuffer = BLUR_EDGE + SCALE_FACTOR;
 
   var stride = width + buildbuffer;
   var colorvalues = new Array(stride * (height + buildbuffer));
-  var iterations = 11;
+  var iterations = 9;
   var singlecolor = true;
 
 
@@ -230,10 +230,30 @@ export default function olsenNoise(width, height, xpos = 0, ypos = 0, seed = 0) 
 
   fieldOlsenNoise(iterations, colorvalues, stride, xpos, ypos, width, height);
   const heightmap = nj.zeros([width, height]);
+
+  const getValue = (x, y) => colorvalues[(y * stride) + x];
+
   for (let x = 0; x < width; x++) {
     for (let y = 0; y < height; y++) {
-      const value = colorvalues[(y * stride) + x];
+      const value = getValue(x, y);
       heightmap.set(x, y, value & 0xFF);
+    }
+  }
+
+  // simple box blur
+  for (let x = 1; x < width - 1; x++) {
+    for (let y = 1; y < height - 1; y++) {
+      const mean = _.mean([
+        heightmap.get(x + 1, y + 1),
+        heightmap.get(x - 1, y - 1),
+        heightmap.get(x - 1, y + 1),
+        heightmap.get(x + 1, y - 1),
+        heightmap.get(x, y + 1),
+        heightmap.get(x + 1, y),
+        heightmap.get(x, y - 1),
+        heightmap.get(x - 1, y)
+      ]);
+      heightmap.set(x, y, mean);
     }
   }
   return heightmap;
