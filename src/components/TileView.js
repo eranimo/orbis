@@ -5,11 +5,11 @@ import DiamondSquare from '../utils/diamondSquare';
 import Random from '../utils/random';
 import olsenNoise from '../utils/olsenNoise';
 import { Button } from '@blueprintjs/core';
-import { makeRivers } from '../utils/rivers';
+import makeRivers from '../utils/flow';
 
 
 const MAP_SIZE = 30;
-const CELL_SIZE = 1;
+const CELL_SIZE = 2;
 const TILE_SIZE = 500;
 const MAP_CELL_WIDTH = 50;
 const MAP_CELL_HEIGHT = 50;
@@ -24,12 +24,16 @@ class Cell {
     this.cy = cy;
     this.tile = tile;
     this.isRiver = false;
-
+    this.isLake = false;
     this._neighbors = null;
   }
 
   get height() {
     return this.tile.heightmap.get(this.cx, this.cy);
+  }
+
+  get altitude() {
+    return this.height - this.tile.world.sealevel;
   }
 
   get type() {
@@ -42,6 +46,10 @@ class Cell {
 
   get isOcean() {
     return this.type === 'ocean';
+  }
+
+  get isEdge() {
+    return this.cx === 0 || this.cx === this.tile.width - 1 || this.cy === 0 || this.cy === this.height - 1;
   }
 
 
@@ -84,8 +92,24 @@ class Cell {
     return _.orderBy(_.filter(this.neighbors, ({ height }) => height > this.height), 'height', 'desc');
   }
 
+  get downhillCells() {
+    return _.orderBy(_.filter(this.neighbors, ({ height }) => height < this.height), 'height', 'asc');
+  }
+
+  get levelledCells() {
+    return _.filter(this.neighbors, ({ height }) => height === this.height)
+  }
+
   get isCoastal() {
     return this.isLand && _.some(this.neighbors, ['isOcean', true]);
+  }
+
+  flood(conditionFunc) {
+    return this.tile.floodFillAt(this.cx, this.cy, conditionFunc);
+  }
+
+  toString() {
+    return `Cell(cx: ${this.cx}, cy: ${this.cy}, height: ${this.height}, type: ${this.type})`;
   }
 }
 
@@ -112,12 +136,8 @@ class Tile {
   }
 
   getCell(x, y) {
-    try {
-      if (this.cells[x][y] === null) {
-        this.cells[x][y] = new Cell(x, y, this);
-      }
-    } catch (e) {
-      throw new Error(`Cannot find cell: ${x}, ${y}`);
+    if (this.cells[x][y] === null) {
+      this.cells[x][y] = new Cell(x, y, this);
     }
     return this.cells[x][y];
   }
@@ -138,6 +158,36 @@ class Tile {
       }
     });
     return coastal;
+  }
+
+  // perform a flood fill at a point
+  // returning a list of cells that match it
+  floodFillAt(x, y, conditionFunc) {
+    const visited = new Set();
+
+
+    function flood(cell) {
+
+      // don't flood to cells that don't meet the condition
+      if (!conditionFunc(cell)){
+        return;
+      }
+
+      // don't visit already visited cells
+      if (visited.has(cell)) {
+        return;
+      }
+
+      // visit this cell
+      visited.add(cell);
+
+      // visit all neighboring cells
+      cell.neighbors.forEach(n => {
+        flood(n);
+      });
+    }
+    flood(this.getCell(x, y));
+    return visited;
   }
 
 }
@@ -189,8 +239,11 @@ export default class TileView extends Component {
     this.worldMap.generateTile(this.state.tx, this.state.ty);
     console.timeEnd('Generate or get tile');
 
-    this.rivers = makeRivers(this.currentTile);
-    console.log(this.rivers);
+    console.time('Make rivers');
+    const rivers = makeRivers(this.currentTile);
+    console.log(rivers);
+    this.rivers = rivers;
+    console.timeEnd('Make rivers');
 
     console.time('Draw tile');
     this.draw();
@@ -210,12 +263,24 @@ export default class TileView extends Component {
     // draw each pixel in the currentTile.heightmap
     for (let hx = 0; hx < TILE_SIZE; hx++) {
       for (let hy = 0; hy < TILE_SIZE; hy++) {
-        const height = Math.round(this.currentTile.heightmap.get(hx, hy) / 5) * 5;
+        const cell = this.currentTile.getCell(hx, hy);
+        const height = Math.round(this.currentTile.heightmap.get(hx, hy) / 3) * 3;
         if (this.currentTile.heightmap.get(hx, hy) < this.worldMap.sealevel) {
           ctx.fillStyle = 'rgb(0, 0, 200)';
         } else {
           ctx.fillStyle = `rgb(${height}, ${height}, ${height})`;
         }
+
+        // if (!cell.isEdge && cell.downhillCells.length === 0) {
+        //   ctx.fillStyle = 'purple';
+        // } else if (this.lake.cell === cell) {
+        //   ctx.fillStyle = 'red';
+        // } else if(this.lake.spill === cell) {
+        //   ctx.fillStyle = 'yellow';
+        // } else if (this.lake.lake.has(cell)) {
+        //   ctx.fillStyle = 'green';
+        // }
+
         ctx.fillRect(
           hx * CELL_SIZE,
           hy * CELL_SIZE,
@@ -224,16 +289,25 @@ export default class TileView extends Component {
       }
     }
 
-    function drawRiver(segment) {
-      ctx.fillStyle = 'blue';
-      ctx.fillRect(segment.cell.cx * CELL_SIZE, segment.cell.cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      segment.next.forEach(seg => {
-        drawRiver(seg);
-      });
+    function drawRiverPart(part) {
+      console.log(part);
+      if (part.cells) {
+        ctx.fillStyle = 'lightblue';
+        part.cells.forEach(cell => {
+          ctx.fillRect(cell.cx * CELL_SIZE, cell.cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        });
+      } else {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(part.cell.cx * CELL_SIZE, part.cell.cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      }
     }
 
-    this.rivers.forEach(segment => {
-      drawRiver(segment);
+    this.rivers.forEach(river => {
+      let active = river.next;
+      while(active !== null) {
+        drawRiverPart(active);
+        active = active.next;
+      }
     });
 
 
@@ -262,6 +336,10 @@ export default class TileView extends Component {
     canvas.addEventListener('click', event => {
       const { cx, cy } = this.pointToCell(event);
       console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.currentTile.heightmap.get(cx, cy)})`);
+
+      const clickedCell = this.currentTile.getCell(cx, cy);
+      console.log(clickedCell);
+      // this.draw();
     });
   }
   get currentTile() {

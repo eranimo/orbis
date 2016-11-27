@@ -1,124 +1,164 @@
 import nj from 'numjs';
 import _ from 'lodash';
 
-export default class Flow {
-  constructor(heightmap, sealevel) {
-    this.heightmap = heightmap;
-    this.sealevel = sealevel;
 
-    this.width = heightmap.shape[0];
-    this.height = heightmap.shape[1];
-
-    // stores the amount of water at each cell
-    this.watermap = nj.ones([this.width, this.height]);
-
-    // stores the amount of water that has passed through each cell
-    this.flowmap = nj.zeros([this.width, this.height]);
-
-    const coordinateHash = (x, y) => `${x}-${y}`;
-    this.neighbors = _.memoize(this._neighbors, coordinateHash);
-    this.getWaterHeight = _.memoize(this._getWaterHeight, coordinateHash);
-    this.getFlowNeighbors = _.memoize(this._getFlowNeighbors, coordinateHash);
+const DEBUG = true;
 
 
-    this.flowmapMean = null;
+class River {
+  get size() {
+    let count = 0;
+    let active = this.next;
+    while(active !== null) {
+      count++;
+      active = active.next;
+    }
+    return count;
+  }
+}
+
+class Lake {
+  constructor(cells, upstreamSegment) {
+    this.cells = cells;
+    this.upstreamSegment = upstreamSegment;
+    this.next = null;
   }
 
-  // gets the neighbors without wrapping
-  // returns a tuple of x, y coordinates
-  _neighbors(x, y) {
-    const n = [];
-    if (x !== this.width - 1 && y !== this.height - 1) {
-      n.push([x + 1, y + 1]);
-    }
-    if (x !== 0 && y !== 0) {
-      n.push([x - 1, y - 1]);
-    }
-    if (x !== 0 && y !== this.height - 1) {
-      n.push([x - 1, y + 1]);
-    }
-    if (x !== this.width - 1 && y !== 0) {
-      n.push([x + 1, y - 1]);
-    }
-    if (y !== this.height - 1) {
-      n.push([x, y + 1]);
-    }
-    if (x !== this.width - 1) {
-      n.push([x + 1, y]);
-    }
-    if (y !== 0) {
-      n.push([x, y - 1]);
-    }
-    if (x !== 0) {
-      n.push([x - 1, y]);
-    }
-    return n;
+  get size() {
+    return this.cells.size;
   }
+}
 
-  _getWaterHeight(x, y) {
-    return this.heightmap.get(x, y) + this.watermap.get(x, y);
+class RiverSegment {
+  constructor(cell, count) {
+    this.cell = cell;
+    this.count = count;
+    this.next = null; // Lake or RiverSegment
   }
+}
 
-  _getFlowNeighbors(x, y) {
-    const myWaterHeight = this.getWaterHeight(x, y);
-    const neighbors = this.neighbors(x, y)
-      .map(([ x, y ]) => {
-        return {
-          height: this.heightmap.get(x, y),
-          waterHeight: this.getWaterHeight(x, y),
-          x, y
-        };
-      });
-    const sorted = _.sortBy(neighbors, 'height', 'desc');
-    // only get the neighbors that have a lower water height
-    const filtered = _.filter(sorted, ({ waterHeight, height }) => waterHeight < myWaterHeight && height > this.sealevel);
-    return filtered;
-  }
 
-  get waterHeightGrid() {
-    return this.heightmap.add(this.watermap);
-  }
+// makes an island by raising the water level then stopping
+// when one of the pixels is lower in height than the last level
+// this pixel has a downhill neighbor and can be made in to a river
+export function fillLake(cell) {
+  if (DEBUG) console.group(`Lake at ${cell}`);
 
-  get averageWaterHeight() {
-    return this.waterHeightGrid.mean();
-  }
+  /*
+  MAKE A LAKE
+  The goal is to find the pixel where the lake overfills
+  and move the cell's water there
 
-  /* River flow algorithm
-   *
-   * Move all water downhill:
-   *
-   * definitions:
-   *  - height: the value of the heightmap (terrain height)
-   *  - watermap amount: the value of the watermap (water amount)
-   *  - water height: the sum of the height and the water amount
-   *
-   * if there is a neighboring cell that has a water height below this cell, (<=),
-   *  transfer this cell's water amount to that cell
-   * if the lowest neighbor's water height is equal to this cell's water height, (=)
-   *  then form a lake by not moving the water
-   * if there are no neighboring cells with a lower water height, (>)
-   *  then form a lake by not moving the water
-   */
-  step() {
-    for (let x = 0; x < this.width; x++) {
-      for (let y = 0; y < this.height; y++) {
-        const myHeight = this.heightmap.get(x, y);
-        if (myHeight > this.sealevel) {
-          const myWaterAmount = this.watermap.get(x, y);
-          const flowNeighbors = this.getFlowNeighbors(x, y);
-          if (flowNeighbors && flowNeighbors.length > 0) {
-            const lowest = flowNeighbors[0];
-            this.watermap.set(x, y, 0);
-            const flow = this.watermap.get(lowest.x, lowest.y) + myWaterAmount;
-            this.watermap.set(lowest.x, lowest.y, flow);
-            this.flowmap.set(x, y, this.flowmap.get(x, y) + flow);
+  - at the starting cell, do a flood fill for <= cell.height + waterLevel, starting at waterLevel = 1
+    and raising each iteration
+  - stop the loop when the flood fill captures a cell with a lower height than
+    any cell in the last iteration
+  */
+  const lake = new Set();
+  let waterLevel = 1;
+  let lastIterationFloodSet = null;
+  let spill = null;
+
+  while(spill === null) {
+    if (DEBUG) console.log(`Raising water level to ${waterLevel}`);
+    const results = cell.flood(c => c.height <= cell.height + waterLevel);
+    lastIterationFloodSet = results;
+    if (results.size === 0) {
+      break;
+    }
+    for (const c of results) {
+      c.isLake = true;
+      lake.add(c);
+    }
+    if (lastIterationFloodSet) {
+      for (const c1 of results) {
+        for (const c2 of lastIterationFloodSet) {
+          if (c1.height < c2.height) {
+            spill = c1;
           }
         }
       }
     }
-
-    this.flowmapMean = this.flowmap.mean();
-    this.flowmapMax = this.flowmap.max();
-    console.log(`Min: ${this.flowmap.min()}, Max: ${this.flowmap.max()}, Mean: ${this.flowmap.mean()}`);
+    waterLevel++;
   }
+  if (spill === null) {
+    if (DEBUG) console.log(`Couldn't create a lake, flood set was empty.`);
+    if (DEBUG) console.log(cell);
+    debugger;
+    return null;
+  }
+
+  if (DEBUG) console.log(`Spill cell:`);
+  if (DEBUG) console.log(spill);
+  if (DEBUG) console.log(`Lake size: ${lake.size}`);
+  if (DEBUG) console.log(`Lake water level ${waterLevel}`);
+  if (DEBUG) console.groupEnd(`Lake at ${cell}`);
+
+  return { lake, spill, cell };
+}
+
+// make a river from the source cell to the ocean or the edge of this tile
+function makeRiver(sourceCell) {
+  console.log(sourceCell);
+  let activeCell = sourceCell;
+  const river = new River();
+  let lastSegment = river;
+  let count = 1;
+
+  while(activeCell.isLand && !activeCell.isEdge) {
+    console.log(count, activeCell);
+    if (activeCell.downhillCells.length > 0) {
+      activeCell.isRiver = true;
+      const segment = new RiverSegment(activeCell, count);
+      lastSegment.next = segment;
+      lastSegment = segment;
+
+      const downhill = activeCell.downhillCells[0];
+      if (downhill.isRiver) {
+        // this is a river, end here
+        break;
+      } else {
+        // make a river
+        activeCell = activeCell.downhillCells[0];
+      }
+    } else {
+      // make a lake
+      const { lake: lakeCells, spill } = fillLake(activeCell);
+      spill.isSpill = true;
+      activeCell.isRiverMouth = true;
+      const lake = new Lake(lakeCells, activeCell);
+      // TODO: river segments inside this lake must be removed
+      lastSegment.next = lake;
+      lastSegment = lake;
+      activeCell = spill; // connect lake to river
+    }
+    count++;
+  }
+  console.log('river', river);
+  console.log('activeCell', activeCell);
+  return river;
+}
+
+
+export default function makeRivers(tile) {
+  const rivers = [];
+
+  rivers.push(makeRiver(tile.getCell(214, 334)));
+
+  // find river source cells
+  // let riverSources = [];
+  // tile.forEachCell(cell => {
+  //   if (cell.downhillCells.length > 0 && cell.altitude > 20) {
+  //     riverSources.push(cell);
+  //   }
+  // });
+  //
+  // riverSources = _.take(riverSources, 1);
+  //
+  // // make rivers
+  // riverSources.forEach(sourceCell => {
+  //   rivers.push(makeRiver(sourceCell));
+  // });
+
+  return rivers;
 }
