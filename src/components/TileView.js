@@ -6,6 +6,7 @@ import Random from '../utils/random';
 import olsenNoise from '../utils/olsenNoise';
 import { Button } from '@blueprintjs/core';
 import makeRivers from '../utils/flow';
+import ds from 'datastructures-js';
 
 
 const MAP_SIZE = 30;
@@ -164,29 +165,18 @@ class Tile {
   // returning a list of cells that match it
   floodFillAt(x, y, conditionFunc) {
     const visited = new Set();
+    const queue = new ds.queue();
 
+    queue.enqueue(this.getCell(x, y));
 
-    function flood(cell) {
+    while (!queue.isEmpty()) {
+      const cell = queue.dequeue();
 
-      // don't flood to cells that don't meet the condition
-      if (!conditionFunc(cell)){
-        return;
+      if (conditionFunc(cell) && !visited.has(cell)) {
+        visited.add(cell);
+        cell.neighbors.forEach(queue.enqueue);
       }
-
-      // don't visit already visited cells
-      if (visited.has(cell)) {
-        return;
-      }
-
-      // visit this cell
-      visited.add(cell);
-
-      // visit all neighboring cells
-      cell.neighbors.forEach(n => {
-        flood(n);
-      });
     }
-    flood(this.getCell(x, y));
     return visited;
   }
 
