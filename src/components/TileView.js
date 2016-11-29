@@ -29,6 +29,10 @@ class Cell {
     this._neighbors = null;
   }
 
+  get id() {
+    return '(' + this.cx + ', ' + this.cy + ')';
+  }
+
   get height() {
     return this.tile.heightmap.get(this.cx, this.cy);
   }
@@ -95,6 +99,10 @@ class Cell {
 
   get downhillCells() {
     return _.orderBy(_.filter(this.neighbors, ({ height }) => height < this.height), 'height', 'asc');
+  }
+
+  get downhillLandCells() {
+    return _.orderBy(_.filter(this.neighbors, ({ height, isRiver, isLake }) => height < this.height && !isRiver && !isLake), 'height', 'asc');
   }
 
   get levelledCells() {
@@ -279,10 +287,11 @@ export default class TileView extends Component {
       }
     }
 
+    console.groupCollapsed('Draw rivers');
     function drawRiverPart(part) {
-      console.log(part);
+      console.log('drawing', part);
       if (part.cells) {
-        ctx.fillStyle = 'lightblue';
+        ctx.fillStyle = `rgba(0, ${_.random(0, 255)}, ${_.random(0, 255)}, 0.2)`;
         part.cells.forEach(cell => {
           ctx.fillRect(cell.cx * CELL_SIZE, cell.cy * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         });
@@ -299,6 +308,7 @@ export default class TileView extends Component {
         active = active.next;
       }
     });
+    console.groupEnd('Draw rivers');
 
 
     // if (cx !== null && cy !== null) {
