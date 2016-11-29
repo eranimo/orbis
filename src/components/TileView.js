@@ -113,6 +113,10 @@ class Cell {
     return this.isLand && _.some(this.neighbors, ['isOcean', true]);
   }
 
+  get isValidRiverSource() {
+    return this.downhillLandCells.length > 0;
+  }
+
   flood(conditionFunc) {
     return this.tile.floodFillAt(this.cx, this.cy, conditionFunc);
   }
@@ -237,11 +241,7 @@ export default class TileView extends Component {
     this.worldMap.generateTile(this.state.tx, this.state.ty);
     console.timeEnd('Generate or get tile');
 
-    console.time('Make rivers');
-    const rivers = makeRivers(this.currentTile);
-    console.log(rivers);
-    this.rivers = rivers;
-    console.timeEnd('Make rivers');
+    this.rivers = [];
 
     console.time('Draw tile');
     this.draw();
@@ -338,7 +338,18 @@ export default class TileView extends Component {
       console.log(`Clicked on cell (${cx}, ${cy}) (height: ${this.currentTile.heightmap.get(cx, cy)})`);
 
       const clickedCell = this.currentTile.getCell(cx, cy);
-      console.log(clickedCell);
+      console.log(clickedCell, clickedCell.downhillLandCells);
+
+      if (clickedCell.isValidRiverSource) {
+        console.time('Make rivers');
+        const rivers = makeRivers(this.currentTile, clickedCell);
+        console.log(rivers);
+        this.rivers = rivers;
+        console.timeEnd('Make rivers');
+        this.draw();
+      }
+
+
       // this.draw();
     });
   }

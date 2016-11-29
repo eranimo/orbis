@@ -55,7 +55,7 @@ class RiverSegment {
 // makes an island by raising the water level then stopping
 // when one of the pixels is lower in height than the last level
 // this pixel has a downhill neighbor and can be made in to a river
-export function fillLake(cell) {
+export function fillLake(cell, step = 0.1) {
   if (DEBUG) console.group(`Lake at ${cell}`);
 
   /*
@@ -72,17 +72,24 @@ export function fillLake(cell) {
   let waterLevel = cell.height;
   let lastIterationFloodSet = null;
   let spill = null;
+  let iteration = 0;
+  let isFillingTooFast = false;
 
   while(spill === null) {
     if (DEBUG) console.log(`Raising water level to ${waterLevel}`);
 
     const results = cell.flood(
-      c => c.isLand && // cell must be land
+      c =>
+      c.isLand && // cell must be land
       c.height <= waterLevel && // and <= to the current water level
       // (!c.isLake || c.lakeSet !== lake) && // not a lake or part of this lake already
       !c.isRiver // can't also be a river
     );
-    if (DEBUG) console.log(`${results.size} cells found`);
+    // if (DEBUG) console.log(`${results.size} cells found`);
+    if (iteration === 0 && results.size > 10000) {
+      isFillingTooFast = true;
+      break;
+    }
 
     if (results.size === 0) {
       break;
@@ -91,7 +98,7 @@ export function fillLake(cell) {
     let lastMinHeight;
     if (lastIterationFloodSet) {
       lastMinHeight = _.minBy(Array.from(lastIterationFloodSet), 'height');
-      console.log(`Last round min height: ${lastMinHeight.height}`)
+      if (DEBUG) console.log(`Last round min height: ${lastMinHeight.height}`)
     }
 
     for (const c of results) {
@@ -130,15 +137,21 @@ export function fillLake(cell) {
     //     spill = thisMin;
     //   }
     // }
+    iteration++;
     lastIterationFloodSet = results;
-    waterLevel++;
+    waterLevel += step;
+  }
+  if (isFillingTooFast) {
+    console.log(cell);
+    console.groupEnd('Make rivers');
+    throw new Error(`Step ${step} is too fast. Restarting at ${step * 0.1}`);
+    return fillLake(cell, step * 0.1);
   }
   if (spill === null) {
     if (DEBUG) console.log(`Couldn't create a lake, flood set was empty.`);
     if (DEBUG) console.log(cell);
     if (DEBUG) console.log(lastIterationFloodSet);
-    debugger;
-    return null;
+    throw new Error('');
   }
 
   if (DEBUG) console.log(`Spill cell:`);
@@ -152,16 +165,16 @@ export function fillLake(cell) {
 
 // make a river from the source cell to the ocean or the edge of this tile
 function makeRiver(sourceCell) {
-  console.log(sourceCell);
+  if (DEBUG) console.log(sourceCell);
   let activeCell = sourceCell;
   const river = new River();
   let lastSegment = river;
   let count = 1;
 
   while(activeCell.isLand && !activeCell.isEdge) {
-    console.log(count, activeCell);
+    if (DEBUG) console.log(count, activeCell);
     if (activeCell.downhillLandCells.length > 0) {
-      console.log('river');
+      if (DEBUG) console.log('river');
       activeCell.isRiver = true;
       const segment = new RiverSegment(activeCell, count);
       lastSegment.next = segment;
@@ -170,7 +183,7 @@ function makeRiver(sourceCell) {
       const downhill = activeCell.downhillLandCells[0];
       if (downhill.isRiver) {
         // this is a river, end here
-        console.log('downhill is a river:', downhill);
+        if (DEBUG) console.log('downhill is a river:', downhill);
         break;
       } else {
         // make a river
@@ -189,16 +202,16 @@ function makeRiver(sourceCell) {
     }
     count++;
   }
-  console.log('river', river);
-  console.log('activeCell', activeCell);
+  if (DEBUG) console.log('river', river);
+  if (DEBUG) console.log('activeCell', activeCell);
   return river;
 }
 
 
-export default function makeRivers(tile) {
+export default function makeRivers(tile, cell) {
   const rivers = [];
-  console.group('Make rivers');
-  rivers.push(makeRiver(tile.getCell(214, 334)));
+  console.groupCollapsed('Make rivers');
+  rivers.push(makeRiver(cell));
   console.groupEnd('Make rivers');
 
   // find river source cells
