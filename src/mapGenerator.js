@@ -31,7 +31,7 @@ export default function generateMap(settings) {
   settings = Object.assign({}, {
     radius: 10,
     cellInitialWater: 5,
-    riverThreshold: 50,
+    riverThreshold: 250,
     width: 900,
     height: 700,
     rivers: true
@@ -39,9 +39,19 @@ export default function generateMap(settings) {
 
   const random = new Random(settings.seed);
 
+  console.time('dot resolution');
+
   // get Poisson-Disc dots
-  const sampler = poissonDiscSampler(settings.width, settings.height, settings.radius, random);
-  const dots = getDots(sampler);
+  // const sampler = poissonDiscSampler(settings.width, settings.height, settings.radius, random);
+  // const dots = getDots(sampler);
+
+	const dots = [];
+	for (let i = 0; i < 5000; i++) {
+		dots.push({
+			x: _.random(0, settings.width),
+			y: _.random(0, settings.height)
+		});
+	}
 
   const voronoi = new Voronoi();
   const bbox = {
@@ -50,6 +60,7 @@ export default function generateMap(settings) {
     yt: 0,
     yb: settings.height
   };
+  console.timeEnd('dot resolution');
   // compute voronoi diagram
   console.time('voronoi computing');
   voronoi.quantizeSites(dots);
